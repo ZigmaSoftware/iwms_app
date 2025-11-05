@@ -1,8 +1,11 @@
 // lib/router/app_router.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:iwms_citizen_app/core/di.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
+import 'package:iwms_citizen_app/logic/vehicle_tracking/vehicle_bloc.dart';
 
 // --- Import all your screens ---
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/splashscreen.dart';
@@ -93,7 +96,10 @@ class AppRouter {
               : "Citizen";
           return _buildTransitionPage(
             state,
-            CitizenDashboard(userName: userName),
+            BlocProvider(
+              create: (_) => getIt<VehicleBloc>(),
+              child: CitizenDashboard(userName: userName),
+            ),
           );
         },
       ),
@@ -188,7 +194,8 @@ class AppRouter {
     }
 
     // 3. If user is UNauthenticated
-    if (authState is AuthStateUnauthenticated || authState is AuthStateFailure) {
+    if (authState is AuthStateUnauthenticated ||
+        authState is AuthStateFailure) {
       if (onSplash) {
         return AppRoutePaths.selectUser;
       }

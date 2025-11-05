@@ -12,6 +12,8 @@ class VehicleModel extends Equatable {
   final String? status;
   final double? wasteCapacityKg;
   final String? lastUpdated;
+  final bool isInsideGeofence;
+  final String? address;
 
   const VehicleModel({
     required this.id,
@@ -22,6 +24,8 @@ class VehicleModel extends Equatable {
     this.status,
     this.wasteCapacityKg,
     this.lastUpdated,
+    this.isInsideGeofence = false,
+    this.address,
   });
 
   // Factory constructor to safely parse JSON from the API
@@ -33,7 +37,7 @@ class VehicleModel extends Equatable {
       if (value is num) return value.toDouble();
       return 0.0;
     }
-    
+
     // Helper function for safe int parsing, defaulting to 0 if data is null or invalid
     int safeParseInt(dynamic value) {
       if (value == null) return 0;
@@ -52,13 +56,15 @@ class VehicleModel extends Equatable {
         json['DRIVER_NAME']?.toString() ??
         json['driver_name']?.toString();
 
-    final driver = (rawDriverName == '-' || rawDriverName?.trim().isEmpty == true)
-        ? null
-        : rawDriverName;
+    final driver =
+        (rawDriverName == '-' || rawDriverName?.trim().isEmpty == true)
+            ? null
+            : rawDriverName;
 
     // --- Map coordinates (Prioritize the inner, numeric 'lat' and 'lng') ---
     final lat = safeParseDouble(json['lat'] ?? json['LAT'] ?? json['latitude']);
-    final lon = safeParseDouble(json['lng'] ?? json['LON'] ?? json['longitude']);
+    final lon =
+        safeParseDouble(json['lng'] ?? json['LON'] ?? json['longitude']);
 
     // --- Load/capacity data (Using loadTruck as a best guess, mapping "nill" to 0) ---
     final loadData = json['loadTruck']?.toString() != 'nill'
@@ -77,9 +83,12 @@ class VehicleModel extends Equatable {
     // This logic correctly interprets the API data based on your provided JSON.
     final ignition = json['ignitionStatus']?.toString().toLowerCase();
     final speed = safeParseInt(json['speed']);
-    
+
     // Use the "status" field (e.g., "OFF") as a fallback if ignitionStatus is missing
     final fallbackStatus = json['status']?.toString().toLowerCase();
+    final insideGeofence =
+        json['insideGeoFence']?.toString().toUpperCase() == 'Y';
+    final address = json['address']?.toString();
 
     String determinedStatus;
 
@@ -98,19 +107,19 @@ class VehicleModel extends Equatable {
       // Fallback for missing or unexpected ignitionStatus (e.g., null, "N/A")
       // We check the speed again just in case.
       if (speed > 0) {
-         determinedStatus = 'Running';
+        determinedStatus = 'Running';
       }
       // Check for "NoData" status from API
       else if (fallbackStatus == 'nodata' || (json['noDataStatus'] == 1)) {
-         determinedStatus = 'No Data';
+        determinedStatus = 'No Data';
       }
       // If we really can't determine, default to 'Parked' if speed is 0.
       else if (speed == 0) {
-         determinedStatus = 'Parked';
+        determinedStatus = 'Parked';
       }
       // Final fallback
       else {
-         determinedStatus = 'No Data';
+        determinedStatus = 'No Data';
       }
     }
     // 🟢 END OF THE REAL FIX
@@ -128,6 +137,8 @@ class VehicleModel extends Equatable {
       // Pass load data through safe parser
       wasteCapacityKg: safeParseDouble(loadData),
       lastUpdated: updateTime,
+      isInsideGeofence: insideGeofence,
+      address: address,
     );
   }
 
@@ -140,6 +151,8 @@ class VehicleModel extends Equatable {
         driverName,
         status,
         wasteCapacityKg,
-        lastUpdated
+        lastUpdated,
+        isInsideGeofence,
+        address,
       ];
 }
