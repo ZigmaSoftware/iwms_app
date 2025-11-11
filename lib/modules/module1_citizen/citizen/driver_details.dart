@@ -30,7 +30,7 @@ class DriverDetailsScreen extends StatelessWidget {
     final primaryColor = colorScheme.primary;
     final textColor = colorScheme.onSurface;
     final placeholderColor = colorScheme.onSurfaceVariant;
-    
+
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
@@ -71,7 +71,8 @@ class DriverDetailsScreen extends StatelessWidget {
             // Collection Summary Card
             Card(
               elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               child: ListTile(
                 leading: Icon(Icons.schedule, color: primaryColor, size: 30),
                 title: Text(
@@ -84,7 +85,8 @@ class DriverDetailsScreen extends StatelessWidget {
                 ),
                 subtitle: Text(
                   'Time: $collectionTime',
-                  style: theme.textTheme.bodySmall?.copyWith(color: placeholderColor),
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: placeholderColor),
                 ),
                 contentPadding: const EdgeInsets.all(16),
               ),
@@ -105,7 +107,8 @@ class DriverDetailsScreen extends StatelessWidget {
             // Driver Card
             Card(
               elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
@@ -114,7 +117,8 @@ class DriverDetailsScreen extends StatelessWidget {
                     CircleAvatar(
                       radius: 30,
                       backgroundColor: primaryColor,
-                      child: const Icon(Icons.person, size: 30, color: Colors.white),
+                      child: const Icon(Icons.person,
+                          size: 30, color: Colors.white),
                     ),
                     const SizedBox(width: 20),
                     // Driver Name & Vehicle
@@ -160,21 +164,21 @@ class DriverDetailsScreen extends StatelessWidget {
                 onPressed: () {
                   // NEW GOROUTER NAVIGATION: Navigate to the MapScreen
                   context.pushNamed(
-                    'citizenMap', // Use a named route for cleaner navigation
-                    extra: {
-                      'driverName': currentDriverName,
-                      'vehicleNumber': currentVehicleNumber,
-                    },
+                    'citizenAllotedVehicleMap',
                   );
                 },
                 icon: const Icon(Icons.location_searching, color: Colors.white),
                 label: const Text(
                   'Track Vehicle Live',
-                  style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   elevation: 6,
                 ),
               ),

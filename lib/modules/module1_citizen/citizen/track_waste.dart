@@ -54,7 +54,8 @@ class TrackWasteScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surface,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: colorScheme.outline.withOpacity(0.4)),
+                  border: Border.all(
+                      color: colorScheme.outline.withValues(alpha: 0.4)),
                 ),
                 child: Center(
                   child: Text(

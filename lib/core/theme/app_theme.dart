@@ -6,6 +6,7 @@ import 'package:iwms_citizen_app/core/constants.dart'; // Import your kPrimaryCo
 class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(
+      useMaterial3: true,
       primaryColor: kPrimaryColor,
       fontFamily: AppTextStyles.fontFamily,
       scaffoldBackgroundColor: AppColors.background,
@@ -13,8 +14,8 @@ class AppTheme {
         seedColor: kPrimaryColor,
         primary: kPrimaryColor,
         secondary: AppColors.primaryVariant,
-        background: AppColors.background,
         surface: AppColors.surface,
+        surfaceTint: AppColors.surfaceAlt,
         error: AppColors.error,
         onPrimary: AppColors.white,
         onSecondary: AppColors.white,
@@ -31,7 +32,7 @@ class AppTheme {
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.primary,
-        elevation: 1,
+        elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         titleTextStyle: AppTextStyles.heading2.copyWith(color: Colors.white),
       ),
@@ -40,7 +41,7 @@ class AppTheme {
           backgroundColor: kPrimaryColor,
           foregroundColor: AppColors.white,
           textStyle: AppTextStyles.labelLarge,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -49,7 +50,8 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.accentLight,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
@@ -64,41 +66,49 @@ class AppTheme {
         ),
         labelStyle: AppTextStyles.subTitle,
       ),
+      cardTheme: CardThemeData(
+        color: AppColors.surface,
+        elevation: 4,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+      listTileTheme: ListTileThemeData(
+        iconColor: AppColors.primary,
+        textColor: AppColors.textPrimary,
+      ),
     );
   }
 
   static ThemeData get darkTheme {
-    const darkBackground = Color(0xFF140B2E);
-    const darkSurface = Color(0xFF1D153C);
-
     return ThemeData(
+      useMaterial3: true,
       brightness: Brightness.dark,
       primaryColor: kPrimaryColor,
       fontFamily: AppTextStyles.fontFamily,
-      scaffoldBackgroundColor: darkBackground,
+      scaffoldBackgroundColor: AppColors.darkBackground,
       colorScheme: ColorScheme.fromSeed(
         seedColor: kPrimaryColor,
         brightness: Brightness.dark,
         primary: kPrimaryColor,
         secondary: AppColors.primaryVariant,
-        background: darkBackground,
-        surface: darkSurface,
+        surface: AppColors.darkSurface,
         error: AppColors.error,
         onPrimary: AppColors.white,
         onSecondary: AppColors.white,
       ).copyWith(
         onSurface: AppColors.white,
-        onSurfaceVariant: AppColors.textSecondary.withOpacity(0.7),
+        onSurfaceVariant: Colors.white70,
+        surfaceTint: AppColors.darkCard,
       ),
       textTheme: TextTheme(
         titleLarge: AppTextStyles.titleLarge.copyWith(color: AppColors.white),
         bodyMedium: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
         labelLarge: AppTextStyles.labelLarge.copyWith(color: AppColors.white),
         headlineMedium: AppTextStyles.heading2.copyWith(color: AppColors.white),
-        titleMedium: AppTextStyles.subTitle.copyWith(color: AppColors.white),
+        titleMedium: AppTextStyles.subTitle.copyWith(color: Colors.white70),
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: darkSurface,
+        backgroundColor: AppColors.darkOverlay,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         titleTextStyle: AppTextStyles.heading2.copyWith(color: Colors.white),
@@ -116,8 +126,9 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: darkSurface,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        fillColor: AppColors.darkSurface,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
@@ -131,6 +142,18 @@ class AppTheme {
           borderSide: const BorderSide(color: kPrimaryColor, width: 2),
         ),
         labelStyle: AppTextStyles.subTitle.copyWith(color: AppColors.white),
+      ),
+      cardColor: AppColors.darkCard,
+      dividerColor: Colors.white12,
+      cardTheme: CardThemeData(
+        color: AppColors.darkCard,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+      listTileTheme: const ListTileThemeData(
+        iconColor: Colors.white70,
+        textColor: Colors.white,
       ),
     );
   }

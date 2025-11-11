@@ -10,6 +10,7 @@ import 'package:iwms_citizen_app/logic/vehicle_tracking/vehicle_bloc.dart';
 // --- Import all your screens ---
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/splashscreen.dart';
 import 'package:iwms_citizen_app/presentation/user_selection/user_selection_screen.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/auth_intro.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/login.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/register.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/home.dart';
@@ -18,11 +19,16 @@ import 'package:iwms_citizen_app/modules/module1_citizen/citizen/track_waste.dar
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/driver_details.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/map.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/profile.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/personal_map.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/alloted_vehicle_map.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/grievance_chat.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_login_screen.dart';
 
 // --- Define static route paths ---
 class AppRoutePaths {
   static const String splash = '/';
   static const String selectUser = '/select-user';
+  static const String citizenAuthIntro = '/citizen/auth';
   static const String citizenLogin = '/citizen/login';
   static const String citizenRegister = '/citizen/register';
   static const String citizenHome = '/citizen/home';
@@ -31,7 +37,11 @@ class AppRoutePaths {
   static const String citizenTrack = '/citizen/track';
   static const String citizenDriverDetails = '/citizen/driver-details';
   static const String citizenMap = '/citizen/map';
+  static const String citizenPersonalMap = '/citizen/personal-map';
+  static const String citizenAllotedVehicleMap = '/citizen/alloted-vehicle-map';
+  static const String citizenGrievanceChat = '/citizen/grievance-chat';
   static const String citizenProfile = '/citizen/profile';
+  static const String operatorLogin = '/operator/login';
 }
 
 // --- The App Router ---
@@ -58,6 +68,16 @@ class AppRouter {
             _buildTransitionPage(state, const UserSelectionScreen()),
       ),
       GoRoute(
+        path: AppRoutePaths.operatorLogin,
+        pageBuilder: (context, state) =>
+            _buildTransitionPage(state, const OperatorLoginScreen()),
+      ),
+      GoRoute(
+        path: AppRoutePaths.citizenAuthIntro,
+        pageBuilder: (context, state) =>
+            _buildTransitionPage(state, const CitizenAuthIntroScreen()),
+      ),
+      GoRoute(
         path: AppRoutePaths.citizenLogin,
         pageBuilder: (context, state) =>
             _buildTransitionPage(state, const LoginScreen()),
@@ -65,12 +85,9 @@ class AppRouter {
       GoRoute(
         path: AppRoutePaths.citizenRegister,
         pageBuilder: (context, state) {
-          final data = state.extra as Map<String, dynamic>?;
           return _buildTransitionPage(
             state,
-            RegisterScreen(
-              phone: data?['phone'] as String?,
-            ),
+            const RegisterScreen(),
           );
         },
       ),
@@ -114,6 +131,11 @@ class AppRouter {
             _buildTransitionPage(state, TrackWasteScreen()),
       ),
       GoRoute(
+        path: AppRoutePaths.citizenGrievanceChat,
+        pageBuilder: (context, state) =>
+            _buildTransitionPage(state, const GrievanceChatScreen()),
+      ),
+      GoRoute(
         path: AppRoutePaths.citizenDriverDetails,
         pageBuilder: (context, state) {
           return _buildTransitionPage(
@@ -152,6 +174,31 @@ class AppRouter {
           );
         },
       ),
+      GoRoute(
+        name: 'citizenAllotedVehicleMap',
+        path: AppRoutePaths.citizenAllotedVehicleMap,
+        pageBuilder: (context, state) {
+          return _buildTransitionPage(
+            state,
+            const CitizenAllotedVehicleMapScreen(),
+          );
+        },
+      ),
+      GoRoute(
+        name: 'citizenPersonalMap',
+        path: AppRoutePaths.citizenPersonalMap,
+        pageBuilder: (context, state) {
+          final data = state.extra as Map<String, dynamic>? ?? {};
+          return _buildTransitionPage(
+            state,
+            CitizenPersonalMapScreen(
+              vehicleId: data['vehicleId'] as String?,
+              vehicleNumber: data['vehicleNumber'] as String?,
+              siteName: data['siteName'] as String?,
+            ),
+          );
+        },
+      ),
     ];
 
     router = GoRouter(
@@ -179,7 +226,9 @@ class AppRouter {
 
     final isLoggingIn = (location == AppRoutePaths.citizenLogin ||
         location == AppRoutePaths.citizenRegister ||
-        location == AppRoutePaths.selectUser);
+        location == AppRoutePaths.citizenAuthIntro ||
+        location == AppRoutePaths.selectUser ||
+        location == AppRoutePaths.operatorLogin);
 
     // 2. If user is authenticated
     if (authState is AuthStateAuthenticated) {

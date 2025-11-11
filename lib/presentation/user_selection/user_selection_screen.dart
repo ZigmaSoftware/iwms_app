@@ -1,7 +1,9 @@
 // lib/presentation/user_selection/user_selection_screen.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:iwms_citizen_app/router/app_router.dart'; // We will create this
+import 'package:iwms_citizen_app/router/app_router.dart';
+
+import '../../modules/module1_citizen/citizen/auth_background.dart';
 
 class UserSelectionScreen extends StatelessWidget {
   const UserSelectionScreen({super.key});
@@ -11,109 +13,102 @@ class UserSelectionScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
     final primaryColor = theme.colorScheme.primary;
+    final screenHeight = MediaQuery.of(context).size.height;
 
     return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(110),
-        child: Container(
-          color: const Color(0xFF21381B),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: const SafeArea(
-            bottom: false,
-            child: SizedBox.expand(),
-          ),
-        ),
-      ),
-      body: Container(
-        width: double.infinity,
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/images/bgd.jpg'),
-            fit: BoxFit.cover,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 140,
-              height: 140,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              alignment: Alignment.center,
-              child: Padding(
-                padding: const EdgeInsets.all(25.0),
-                child: Image.asset(
-                  'assets/images/logo.png',
-                  fit: BoxFit.contain,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          const AuthBackground(),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: screenHeight - 48,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 140,
+                      height: 140,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 18,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: Padding(
+                        padding: const EdgeInsets.all(25.0),
+                        child: Image.asset(
+                          'assets/images/logo.png',
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      "Welcome to IWMS",
+                      style: textTheme.headlineMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Who are you?",
+                      style: textTheme.titleLarge?.copyWith(
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 48),
+
+                    // --- User Roles ---
+                    _UserRoleCard(
+                      icon: Icons.person,
+                      title: "Citizen",
+                      onTap: () {
+                        context.push(AppRoutePaths.citizenAuthIntro);
+                      },
+                      iconColor: primaryColor,
+                    ),
+                    _UserRoleCard(
+                      icon: Icons.build,
+                      title: "Operator",
+                      onTap: () {
+                        context.push(AppRoutePaths.operatorLogin);
+                      },
+                      iconColor: primaryColor,
+                    ),
+                    _UserRoleCard(
+                      icon: Icons.admin_panel_settings,
+                      title: "Admin",
+                      onTap: () {
+                        _showComingSoon(context);
+                      },
+                      iconColor: primaryColor,
+                    ),
+                    _UserRoleCard(
+                      icon: Icons.security,
+                      title: "Super Admin",
+                      onTap: () {
+                        _showComingSoon(context);
+                      },
+                      iconColor: primaryColor,
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 24),
-            Text(
-              "Welcome to IWMS",
-              style: textTheme.headlineMedium?.copyWith(
-                color: const Color.fromARGB(255, 255, 255, 255),
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Who are you?",
-              style: textTheme.titleLarge?.copyWith(
-                color: const Color.fromARGB(255, 255, 255, 255),
-              ),
-            ),
-            const SizedBox(height: 48),
-
-            // --- User Roles ---
-            _UserRoleCard(
-              icon: Icons.person,
-              title: "Citizen",
-              onTap: () {
-                // Navigate to Citizen Login
-                context.push(AppRoutePaths.citizenLogin);
-              },
-              iconColor: primaryColor,
-            ),
-            _UserRoleCard(
-              icon: Icons.build,
-              title: "Operator",
-              onTap: () {
-                // Placeholder
-                _showComingSoon(context);
-              },
-              iconColor: primaryColor,
-            ),
-            _UserRoleCard(
-              icon: Icons.admin_panel_settings,
-              title: "Admin",
-              onTap: () {
-                // Placeholder
-                _showComingSoon(context);
-              },
-              iconColor: primaryColor,
-            ),
-            _UserRoleCard(
-              icon: Icons.security,
-              title: "Super Admin",
-              onTap: () {
-                // Placeholder
-                _showComingSoon(context);
-              },
-              iconColor: primaryColor,
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
