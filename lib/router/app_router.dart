@@ -12,6 +12,7 @@ import 'package:iwms_citizen_app/modules/module1_citizen/citizen/splashscreen.da
 import 'package:iwms_citizen_app/presentation/user_selection/user_selection_screen.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/login.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/register.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/chatbot.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/home.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/calender.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/track_waste.dart';
@@ -32,6 +33,7 @@ class AppRoutePaths {
   static const String citizenDriverDetails = '/citizen/driver-details';
   static const String citizenMap = '/citizen/map';
   static const String citizenProfile = '/citizen/profile';
+  static const String citizenChatbot = '/citizen/chatbot';
 }
 
 // --- The App Router ---
@@ -137,6 +139,11 @@ class AppRouter {
             ProfileScreen(userName: userName),
           );
         },
+      ),
+      GoRoute(
+        path: AppRoutePaths.citizenChatbot,
+        pageBuilder: (context, state) =>
+            _buildTransitionPage(state, const ChatBotScreen()),
       ),
       GoRoute(
         name: 'citizenMap',

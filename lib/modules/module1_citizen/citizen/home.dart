@@ -215,7 +215,7 @@ class _CitizenDashboardState extends State<CitizenDashboard> {
       SnackBar(
         content: Text('$feature is coming soon.'),
       ),
-    );w
+    );
   }
 
   Future<void> _pickDate(BuildContext context) async {
@@ -595,7 +595,7 @@ class _CitizenDashboardState extends State<CitizenDashboard> {
       _QuickAction(
         label: 'Raise Grievance',
         assetPath: 'assets/icons/raise_grievance.png',
-        onTap: () => _showComingSoon(context, 'Grievance module'),
+        onTap: () => context.go(AppRoutePaths.citizenChatbot),
       ),
       _QuickAction(
         label: 'Rate Collector',
