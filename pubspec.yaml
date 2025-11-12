@@ -19,25 +19,30 @@ dependencies:
   get_it: ^8.2.0
   equatable: ^2.0.7
   intl: ^0.20.2
+  http: ^1.2.2
   
   # --- UI & Utilities ---
-  device_preview: ^1.1.0 
+  smooth_page_indicator: ^1.2.1
+  animated_bubble_navigation_bar: ^1.1.0
+  motion_tab_bar: ^2.0.4
+  rive: ^0.13.20
   google_fonts: ^6.2.1        # <-- UPGRADED
+  iconify_flutter: ^0.0.7
   shared_preferences: ^2.5.3 
   
   # --- Module 1 (Citizen) Packages ---
   flutter_map: ^7.0.1          # <-- UPGRADED
   latlong2: ^0.9.1            # <-- UPGRADED
-  
-  # --- Module 2 (Driver) Packages ---
-  # Removed driver-specific dependencies while the module is disabled.
-  # mobile_scanner: ^6.0.0
-  # geolocator: ^12.0.0
-  # image_picker: ^1.1.2
-  # permission_handler: ^12.0.1
-  # path_provider: ^2.1.4
-  # flutter_image_compress: ^2.4.0
-  # flutter_bluetooth_serial: ^0.4.0 
+  flutter_local_notifications: 19.5.0
+  # --- Module 3 (Operator) Packages ---
+  mobile_scanner: ^6.0.0
+  geolocator: ^12.0.0
+  image_picker: ^1.1.2
+  permission_handler: ^12.0.1
+  path_provider: ^2.1.4
+  path: ^1.9.0
+  flutter_image_compress: ^2.4.0
+  flutter_bluetooth_serial: ^0.4.0 
 
 dev_dependencies:
   flutter_test:
@@ -58,3 +63,13 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/cards/
+    - assets/gif/
+    - assets/rive/
+    - assets/banner/
+    - asset/images/
+
+  fonts:
+    - family: Montserrat
+      fonts:
+        - asset: assets/fonts/Montserrat-Regular.ttf
+        - asset: assets/fonts/Montserrat-Italic.ttf

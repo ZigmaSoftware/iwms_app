@@ -6,7 +6,6 @@ import '../../data/repositories/auth_repository.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 
-const String _demoCitizenPhone = '9786255854';
 const String _demoCitizenName = 'Citizen Demo';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
@@ -54,10 +53,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     emit(const AuthStateLoading());
-    final trimmedPhone = event.phone.trim();
+    final trimmedName = (event.fullName ?? '').trim();
+    final displayName = trimmedName.isNotEmpty
+        ? trimmedName
+        : (event.phone?.trim().isNotEmpty == true
+            ? 'Citizen ${event.phone}'
+            : _demoCitizenName);
     final user = UserModel(
-      userId: 'CUS-$trimmedPhone',
-      userName: _demoCitizenName,
+      userId: 'CUS-${displayName.replaceAll(' ', '').toUpperCase()}',
+      userName: displayName,
       role: 'citizen',
       authToken: 'demo-token-citizen',
     );
@@ -70,10 +74,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     emit(const AuthStateLoading());
-    final userName =
-        event.ownerName.isNotEmpty ? event.ownerName : _demoCitizenName;
+    final trimmedName = event.fullName.trim();
+    final userName = trimmedName.isNotEmpty ? trimmedName : _demoCitizenName;
     final user = UserModel(
-      userId: 'CUS-REG-${event.phone.trim()}',
+      userId: 'CUS-REG-${userName.replaceAll(' ', '').toUpperCase()}',
       userName: userName,
       role: 'citizen',
       authToken: 'demo-token-citizen',
@@ -90,10 +94,4 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(const AuthStateUnauthenticated());
   }
 
-  String _errorMessage(Object error) {
-    final message = error.toString();
-    return message.startsWith('Exception: ')
-        ? message.replaceFirst('Exception: ', '')
-        : message;
-  }
 }

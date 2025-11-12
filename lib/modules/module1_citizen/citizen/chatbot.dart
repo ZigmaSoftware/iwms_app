@@ -26,14 +26,14 @@ class ChatMessage {
   });
 }
 
-class ChatBotScreen extends StatefulWidget {
-  const ChatBotScreen({Key? key}) : super(key: key);
+class GrievanceChatScreen extends StatefulWidget {
+  const GrievanceChatScreen({super.key});
 
   @override
-  State<ChatBotScreen> createState() => _ChatBotScreenState();
+  State<GrievanceChatScreen> createState() => _GrievanceChatScreenState();
 }
 
-class _ChatBotScreenState extends State<ChatBotScreen> {
+class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
   final List<ChatMessage> messages = [
     ChatMessage(
       sender: 'bot',

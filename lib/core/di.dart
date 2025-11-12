@@ -5,6 +5,7 @@ import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/shared/services/collection_history_service.dart';
 import 'package:iwms_citizen_app/shared/services/notification_service.dart';
+import 'package:iwms_citizen_app/data/repositories/site_repository.dart';
 
 // --- Vehicle Tracking Imports ---
 import 'package:iwms_citizen_app/data/repositories/vehicle_repository.dart';
@@ -28,6 +29,7 @@ Future<void> setupDI() async {
   );
   getIt.registerLazySingleton(() => NotificationService());
   await getIt<CollectionHistoryService>().initialize();
+  await getIt<NotificationService>().initialize();
 
   // --- Repositories ---
   getIt.registerLazySingleton(() => AuthRepository(
@@ -38,6 +40,11 @@ Future<void> setupDI() async {
 
   // --- Register your VehicleRepository ---
   getIt.registerLazySingleton(() => VehicleRepository(
+        dioClient: getIt<Dio>(),
+      ));
+
+  // --- Site polygons repository (Alpha/Beta/Gamma) ---
+  getIt.registerLazySingleton(() => SiteRepository(
         dioClient: getIt<Dio>(),
       ));
 

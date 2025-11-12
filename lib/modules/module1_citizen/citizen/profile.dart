@@ -23,16 +23,12 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeMode = context.watch<ThemeCubit>().state;
-    final isDarkMode = themeMode == ThemeMode.dark;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final textColor = isDarkMode ? Colors.white : Colors.black87;
-    final secondaryText = isDarkMode ? Colors.white70 : Colors.black54;
-    final highlightColor =
-        isDarkMode ? colorScheme.secondary : colorScheme.primary;
-    final backgroundColor =
-        isDarkMode ? const Color(0xFF0F3D2E) : const Color(0xFFF6FBF4);
+    final textColor = colorScheme.onSurface;
+    final secondaryText = colorScheme.onSurfaceVariant;
+    final highlightColor = colorScheme.primary;
+    final backgroundColor = theme.scaffoldBackgroundColor;
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -41,15 +37,17 @@ class ProfileScreen extends StatelessWidget {
           children: [
             Container(
               width: double.infinity,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-              decoration: const BoxDecoration(
-                image: DecorationImage(
-                  image: AssetImage('assets/images/bgd.jpg'),
-                  fit: BoxFit.cover,
-                  alignment: Alignment.topCenter,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    highlightColor,
+                    highlightColor.withValues(alpha: 0.7),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.only(
+                borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(24),
                   bottomRight: Radius.circular(24),
                 ),
@@ -61,7 +59,14 @@ class ProfileScreen extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       IconButton(
-                        onPressed: () => context.pop(),
+                        onPressed: () {
+                          final router = GoRouter.of(context);
+                          if (router.canPop()) {
+                            router.pop();
+                          } else {
+                            router.go(AppRoutePaths.citizenHome);
+                          }
+                        },
                         icon: const Icon(Icons.arrow_back, color: Colors.white),
                       ),
                       Text(
@@ -74,7 +79,7 @@ class ProfileScreen extends StatelessWidget {
                       const SizedBox(width: 48),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Container(
@@ -82,12 +87,13 @@ class ProfileScreen extends StatelessWidget {
                         height: 64,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.9),
+                          color: colorScheme.onPrimary,
                         ),
                         padding: const EdgeInsets.all(12),
                         child: Image.asset(
-                          'assets/icons/profile.png',
-                          fit: BoxFit.contain,
+                          'assets/gif/profile.gif',
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -125,7 +131,6 @@ class ProfileScreen extends StatelessWidget {
                     icon: Icons.description_outlined,
                     label: 'Collection Details',
                     textColor: textColor,
-                    isDarkMode: isDarkMode,
                     highlightColor: highlightColor,
                     onTap: () => context.go(AppRoutePaths.citizenDriverDetails),
                   ),
@@ -133,7 +138,6 @@ class ProfileScreen extends StatelessWidget {
                     icon: Icons.history,
                     label: 'Collection History & Weighment',
                     textColor: textColor,
-                    isDarkMode: isDarkMode,
                     highlightColor: highlightColor,
                     onTap: () => context.go(AppRoutePaths.citizenHistory),
                   ),
@@ -141,7 +145,6 @@ class ProfileScreen extends StatelessWidget {
                     icon: Icons.location_on_outlined,
                     label: 'Track My Waste',
                     textColor: textColor,
-                    isDarkMode: isDarkMode,
                     highlightColor: highlightColor,
                     onTap: () => context.go(AppRoutePaths.citizenTrack),
                   ),
@@ -149,7 +152,6 @@ class ProfileScreen extends StatelessWidget {
                     icon: Icons.star_rate_outlined,
                     label: 'Rate Last Collection',
                     textColor: textColor,
-                    isDarkMode: isDarkMode,
                     highlightColor: highlightColor,
                     onTap: () => _showComingSoon(context, 'Rating feature'),
                   ),
@@ -157,13 +159,11 @@ class ProfileScreen extends StatelessWidget {
                     icon: Icons.payments_outlined,
                     label: 'View Charges & Fines',
                     textColor: textColor,
-                    isDarkMode: isDarkMode,
                     highlightColor: highlightColor,
                     onTap: () =>
                         _showComingSoon(context, 'Charges & fines section'),
                   ),
                   _ProfileThemeToggle(
-                    isDarkMode: isDarkMode,
                     textColor: textColor,
                     secondaryText: secondaryText,
                     highlightColor: highlightColor,
@@ -172,7 +172,6 @@ class ProfileScreen extends StatelessWidget {
                     icon: Icons.feedback_outlined,
                     label: 'Raise Grievance (Help Desk)',
                     textColor: textColor,
-                    isDarkMode: isDarkMode,
                     highlightColor: highlightColor,
                     onTap: () =>
                         _showComingSoon(context, 'Grievance redressal module'),
@@ -180,7 +179,6 @@ class ProfileScreen extends StatelessWidget {
                   const SizedBox(height: 12),
                   _LogoutTile(
                     textColor: textColor,
-                    isDarkMode: isDarkMode,
                   ),
                 ],
               ),
@@ -198,7 +196,6 @@ class _ProfileOptionTile extends StatelessWidget {
     required this.label,
     required this.onTap,
     required this.textColor,
-    required this.isDarkMode,
     required this.highlightColor,
   });
 
@@ -206,17 +203,16 @@ class _ProfileOptionTile extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   final Color textColor;
-  final bool isDarkMode;
   final Color highlightColor;
 
   @override
   Widget build(BuildContext context) {
-    final Color tileColor =
-        isDarkMode ? const Color(0xFF1A4C38) : Colors.white;
+    final theme = Theme.of(context);
+    final Color tileColor = theme.cardColor;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
-      elevation: isDarkMode ? 0 : 2,
+      elevation: theme.brightness == Brightness.dark ? 0 : 2,
       color: tileColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ListTile(
@@ -228,10 +224,10 @@ class _ProfileOptionTile extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
         ),
-        trailing: Icon(
-          Icons.chevron_right,
-          color: isDarkMode ? Colors.white54 : Colors.grey,
-        ),
+        trailing: Icon(Icons.chevron_right,
+            color: theme.brightness == Brightness.dark
+                ? Colors.white54
+                : Colors.black26),
         onTap: onTap,
       ),
     );
@@ -240,21 +236,20 @@ class _ProfileOptionTile extends StatelessWidget {
 
 class _ProfileThemeToggle extends StatelessWidget {
   const _ProfileThemeToggle({
-    required this.isDarkMode,
     required this.textColor,
     required this.secondaryText,
     required this.highlightColor,
   });
 
-  final bool isDarkMode;
   final Color textColor;
   final Color secondaryText;
   final Color highlightColor;
 
   @override
   Widget build(BuildContext context) {
-    final Color tileColor =
-        isDarkMode ? const Color(0xFF1A4C38) : Colors.white;
+    final theme = Theme.of(context);
+    final Color tileColor = theme.cardColor;
+    final bool isDarkMode = theme.brightness == Brightness.dark;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -294,16 +289,14 @@ class _ProfileThemeToggle extends StatelessWidget {
 class _LogoutTile extends StatelessWidget {
   const _LogoutTile({
     required this.textColor,
-    required this.isDarkMode,
   });
 
   final Color textColor;
-  final bool isDarkMode;
 
   @override
   Widget build(BuildContext context) {
-    final Color tileColor =
-        isDarkMode ? const Color(0xFF1A4C38) : Colors.white;
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final Color tileColor = Theme.of(context).cardColor;
 
     return Card(
       elevation: isDarkMode ? 0 : 2,

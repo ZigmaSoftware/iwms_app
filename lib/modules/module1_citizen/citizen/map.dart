@@ -10,6 +10,8 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/constants.dart';
 import '../../../core/geofence_config.dart';
 import '../../../router/app_router.dart';
+import '../../../data/models/site_polygon.dart';
+import '../../../data/repositories/site_repository.dart';
 
 class MapScreen extends StatefulWidget {
   final String? driverName;
@@ -46,73 +48,135 @@ class _MapScreenState extends State<MapScreen> {
     ),
   };
 
-  // --- NEW: Function to show details modal ---
-  void _showVehicleDetailsModal(BuildContext context, VehicleState state) {
-    List<VehicleModel> vehiclesToShow = [];
-    String title = "Vehicle Details";
-    VehicleFilter activeFilter = VehicleFilter.all;
+  // Site polygons from API
+  List<SitePolygon> _sites = const [];
+  @override
+  void initState() {
+    super.initState();
+    _loadSites();
+  }
+
+  Future<void> _loadSites() async {
+    final repo = getIt<SiteRepository>();
+    final result = await repo.fetchSites();
+    if (mounted) setState(() => _sites = result);
+  }
+
+  // --- Vehicle list (filtered) modal ---
+  void _showVehicleDetailsModal(BuildContext context) {
+    final bloc = context.read<VehicleBloc>();
+    final state = bloc.state;
+
+    List<VehicleModel> list = const [];
+    VehicleFilter filter = VehicleFilter.all;
 
     if (state is VehicleLoaded) {
-      activeFilter = state.activeFilter;
-      // Apply the same filter logic as your map
-      vehiclesToShow = state.vehicles.where((v) {
-        final status = v.status?.toLowerCase() ?? 'no data';
-        switch (activeFilter) {
+      filter = state.activeFilter;
+      list = state.vehicles.where((v) {
+        final s = (v.status ?? '').toLowerCase();
+        switch (filter) {
           case VehicleFilter.all:
             return true;
           case VehicleFilter.running:
-            return status == 'running';
+            return s == 'running';
           case VehicleFilter.idle:
-            return status == 'idle';
+            return s == 'idle';
           case VehicleFilter.parked:
-            return status == 'parked';
+            return s == 'parked';
           case VehicleFilter.noData:
-            return status == 'no data';
+            return s == 'no data';
         }
-      }).toList();
-      title = "${activeFilter.name.toUpperCase()} Vehicles";
+      }).toList(growable: false);
     }
 
     showModalBottomSheet(
       context: context,
-      builder: (BuildContext bc) {
+      useRootNavigator: false,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetCtx) {
+        final theme = Theme.of(sheetCtx);
         if (state is! VehicleLoaded) {
-          return const Center(child: Text('No vehicle data loaded.'));
-        }
-        if (vehiclesToShow.isEmpty) {
-          return Center(
-              child: Text(
-                  'No vehicles found for filter: ${activeFilter.name.toUpperCase()}'));
-        }
-
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text('No vehicle data loaded.',
+                  style: theme.textTheme.bodyLarge),
             ),
-            const Divider(),
-            Expanded(
-              child: ListView.builder(
-                itemCount: vehiclesToShow.length,
-                itemBuilder: (context, index) {
-                  final vehicle = vehiclesToShow[index];
-                  final statusColor = context
-                      .read<VehicleBloc>()
-                      .getStatusColor(vehicle.status);
-                  return ListTile(
-                    leading: Icon(
-                      Icons.local_shipping,
-                      color: statusColor,
-                    ),
-                    title: Text(vehicle.registrationNumber ?? 'Unknown'),
-                    subtitle: Text('Last Update: ${vehicle.lastUpdated}'),
-                    trailing: Text(vehicle.status?.toUpperCase() ?? 'NO DATA'),
-                  );
-                },
+          );
+        }
+        if (list.isEmpty) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text(
+                'No vehicles found for filter: ${filter.name.toUpperCase()}',
+                style: theme.textTheme.bodyLarge,
               ),
             ),
-          ],
+          );
+        }
+
+        return SafeArea(
+          child: BlocProvider.value(
+            value: bloc,
+            child: FractionallySizedBox(
+              heightFactor: 0.7,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${filter.name.toUpperCase()} Vehicles',
+                            style: theme.textTheme.titleLarge,
+                          ),
+                        ),
+                        Text(
+                          '${list.length}',
+                          style: theme.textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: list.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, index) {
+                        final vehicle = list[index];
+                        final color = bloc.getStatusColor(vehicle.status);
+                        return ListTile(
+                          dense: true,
+                          leading: Icon(Icons.local_shipping, color: color),
+                          title: Text(vehicle.registrationNumber ?? 'Unknown'),
+                          subtitle: Text(
+                            'Last update: ${vehicle.lastUpdated ?? 'N/A'}',
+                          ),
+                          trailing: Text(
+                            (vehicle.status ?? 'NO DATA').toUpperCase(),
+                            style: TextStyle(
+                              color: color,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          onTap: () {
+                            bloc.add(VehicleSelectionUpdated(vehicle.id));
+                            Navigator.of(sheetCtx).maybePop();
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         );
       },
     );
@@ -218,6 +282,22 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  Color _polygonFillFor(String name) {
+    final upper = name.toUpperCase();
+    if (upper.startsWith('GAMMA')) return Colors.blue.withValues(alpha: 0.10);
+    if (upper.startsWith('ALPHA')) return Colors.green.withValues(alpha: 0.10);
+    if (upper.startsWith('BETA')) return Colors.orange.withValues(alpha: 0.10);
+    return kPrimaryColor.withValues(alpha: 0.08);
+  }
+
+  Color _polygonStrokeFor(String name) {
+    final upper = name.toUpperCase();
+    if (upper.startsWith('GAMMA')) return Colors.blue;
+    if (upper.startsWith('ALPHA')) return Colors.green;
+    if (upper.startsWith('BETA')) return Colors.deepOrange;
+    return kPrimaryColor;
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
@@ -248,7 +328,7 @@ class _MapScreenState extends State<MapScreen> {
                   icon:
                       const Icon(Icons.list_alt_outlined, color: Colors.white),
                   onPressed: () {
-                    _showVehicleDetailsModal(context, state);
+                    _showVehicleDetailsModal(context);
                   },
                 );
               },
@@ -373,17 +453,28 @@ class _MapScreenState extends State<MapScreen> {
           urlTemplate: themeConfig.urlTemplate,
           subdomains: themeConfig.subdomains,
         ),
-        PolygonLayer(
-          polygons: [
-            Polygon(
-              points: GammaGeofenceConfig.polygon,
-              color: kPrimaryColor.withValues(alpha: 0.08),
-              borderColor: kPrimaryColor.withValues(alpha: 0.55),
-              borderStrokeWidth: 2.5,
-              isFilled: true,
-            ),
-          ],
-        ),
+        if (_sites.isNotEmpty)
+          PolygonLayer(
+            polygons: _sites
+                .map((s) => Polygon(
+                      points: s.points,
+                      color: _polygonFillFor(s.name),
+                      borderColor: _polygonStrokeFor(s.name),
+                      borderStrokeWidth: 2.2,
+                    ))
+                .toList(),
+          )
+        else
+          PolygonLayer(
+            polygons: [
+              Polygon(
+                points: GammaGeofenceConfig.polygon,
+                color: kPrimaryColor.withValues(alpha: 0.08),
+                borderColor: kPrimaryColor.withValues(alpha: 0.55),
+                borderStrokeWidth: 2.5,
+              ),
+            ],
+          ),
         MarkerLayer(markers: markers),
         RichAttributionWidget(
           alignment: AttributionAlignment.bottomRight,

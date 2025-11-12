@@ -80,8 +80,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final formattedDate =
-        "//";
-    final formattedHeader = "/";
+        DateFormat('EEEE, MMM d, yyyy').format(_selectedDate);
+    final formattedHeader = DateFormat('MMMM yyyy').format(_selectedDate);
 
     return Scaffold(
       appBar: AppBar(
@@ -128,7 +128,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Viewing: ',
+                                'Viewing: $formattedDate',
                                 style: const TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -147,7 +147,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 ),
                 const SizedBox(height: 30),
                 Text(
-                  'Collection Log for ',
+                  'Collection Log for $formattedHeader',
                   style: Theme.of(context).textTheme.titleLarge!.copyWith(
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
@@ -157,7 +157,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 const Divider(height: 20),
                 if (totalWeightForDate > 0)
                   Card(
-                    color: kPrimaryColor.withOpacity(0.1),
+                    color: kPrimaryColor.withValues(alpha: 0.1),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -165,8 +165,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Text(
-                        'Total Weight Collected: '
-                        " kg",
+                        'Total Weight Collected: ${totalWeightForDate.toStringAsFixed(2)} kg',
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -225,7 +224,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Collected at ',
+              'Collected at $timeLabel',
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
@@ -234,12 +233,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Customer ID: ',
+              'Customer ID: ${entry.customerId}',
               style: const TextStyle(color: kPlaceholderColor),
             ),
             const SizedBox(height: 4),
             Text(
-              'Total Weight:  kg',
+              'Total Weight: ${entry.totalWeight.toStringAsFixed(2)} kg',
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -299,7 +298,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   border: Border.all(color: color),
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -358,7 +357,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       return Container(
         width: 100,
         height: 100,
-        color: kPlaceholderColor.withOpacity(0.2),
+        color: kPlaceholderColor.withValues(alpha: 0.2),
         child: const Center(
           child: Icon(Icons.image, color: Colors.grey),
         ),
@@ -369,7 +368,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       return Container(
         width: 100,
         height: 100,
-        color: kPlaceholderColor.withOpacity(0.2),
+        color: kPlaceholderColor.withValues(alpha: 0.2),
         child: const Center(
           child: Icon(Icons.broken_image, color: Colors.grey),
         ),
@@ -444,4 +443,3 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 }
-

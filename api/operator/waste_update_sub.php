@@ -1,0 +1,6 @@
+<?php
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/proxy_helper.php';
+forward_request('https://zigma.in/iwms_app/api/waste/update_waste_sub.php');

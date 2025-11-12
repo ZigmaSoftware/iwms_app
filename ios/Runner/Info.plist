@@ -45,5 +45,15 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>The camera is required to scan QR codes for operator waste collection.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photos are accessed to attach proof images for waste collection.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>The app stores compressed photos as part of waste collection records.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Location is used to tag waste collection records with accurate coordinates.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Bluetooth is required to read live weight data from the weighbridge device.</string>
 </dict>
 </plist>

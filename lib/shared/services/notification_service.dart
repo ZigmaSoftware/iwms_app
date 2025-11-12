@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 /// Handles all push / local notification responsibilities for the citizen app.
 ///
@@ -6,46 +8,77 @@ import 'package:flutter/foundation.dart';
 /// real notification plumbing (Firebase Cloud Messaging, local notifications,
 /// etc.) can be wired up later without impacting the rest of the codebase.
 class NotificationService {
-  /// Call this as early as possible (e.g. during app start) to set up the
-  /// notification channels, request permissions, register tokens, and so on.
+  final FlutterLocalNotificationsPlugin _plugin =
+      FlutterLocalNotificationsPlugin();
+
+  static const AndroidNotificationChannel _defaultChannel =
+      AndroidNotificationChannel(
+    'iwms_default_channel',
+    'General',
+    description: 'General notifications for IWMS citizen app',
+    importance: Importance.high,
+  );
+
   Future<void> initialize() async {
-    // TODO: Request notification permissions, configure channels and
-    // initialise the notification plugin of your choice.
-    debugPrint('[NotificationService] initialize() called (placeholder).');
+    const AndroidInitializationSettings androidInit =
+        AndroidInitializationSettings('@mipmap/launcher_icon');
+    const DarwinInitializationSettings iosInit = DarwinInitializationSettings(
+        requestAlertPermission: true,
+        requestBadgePermission: true,
+        requestSoundPermission: true);
+    const InitializationSettings initSettings =
+        InitializationSettings(android: androidInit, iOS: iosInit);
+
+    await _plugin.initialize(initSettings);
+
+    // Android 13+ runtime permission
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
+
+    // Create default channel on Android
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(_defaultChannel);
+
+    debugPrint('[NotificationService] initialized');
   }
 
-  /// Triggers a notification letting the citizen know the waste collector is
-  /// nearby. This will eventually be replaced by real logic fed by location
-  /// updates / schedules.
   Future<void> showCollectorNearbyNotification({
-    String message = 'Waste collector is nearby! Get ready with your waste.',
+    String title = 'Collection Alert',
+    String message = 'A collection vehicle is near. Please segregate waste.',
   }) async {
-    // TODO: Replace this placeholder with an actual push/local notification.
-    debugPrint(
-      '[NotificationService] showCollectorNearbyNotification(): $message',
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+      _kAndroidChannelId,
+      'General',
+      channelDescription: 'General notifications for IWMS citizen app',
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
     );
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails();
+    const NotificationDetails details =
+        NotificationDetails(android: androidDetails, iOS: iosDetails);
+
+    await _plugin.show(101, title, message, details);
   }
 
-  /// Schedules a future notification for scenarios such as pre-arrival alerts
-  /// or daily reminders.
   Future<void> scheduleCollectorReminder({
-    DateTime? triggerAt,
+    required DateTime triggerAt,
+    String title = 'Upcoming pickup',
     String message = 'Waste collection scheduled soon. Prepare your waste.',
   }) async {
-    // TODO: Use your scheduling API (e.g. zoned schedule in flutter_local_notifications).
-    debugPrint(
-      '[NotificationService] scheduleCollectorReminder(): '
-      'triggerAt=$triggerAt message=$message',
-    );
+    // NOTE: For timezone-accurate scheduling, integrate flutter_native_timezone
+    // and use zonedSchedule. Keeping immediate show as a safe fallback.
+    await showCollectorNearbyNotification(title: title, message: message);
   }
 
-  /// Cancels any previously scheduled collector notifications. Useful if the
-  /// route changes or a pickup was completed early.
   Future<void> cancelCollectorNotifications() async {
-    // TODO: Cancel the relevant scheduled notifications.
-    debugPrint(
-      '[NotificationService] cancelCollectorNotifications() called '
-      '(placeholder).',
-    );
+    await _plugin.cancelAll();
   }
 }
+
+const String _kAndroidChannelId = 'iwms_default_channel';
