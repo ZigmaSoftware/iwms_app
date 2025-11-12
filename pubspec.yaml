@@ -27,9 +27,10 @@ dependencies:
   motion_tab_bar: ^2.0.4
   rive: ^0.13.20
   google_fonts: ^6.2.1        # <-- UPGRADED
-  iconify_flutter: ^0.0.7
+  auto_size_text: ^3.0.0
+  awesome_dialog: ^3.1.0
   shared_preferences: ^2.5.3 
-  
+
   # --- Module 1 (Citizen) Packages ---
   flutter_map: ^7.0.1          # <-- UPGRADED
   latlong2: ^0.9.1            # <-- UPGRADED

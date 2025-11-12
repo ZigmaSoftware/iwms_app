@@ -1,16 +1,22 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:motion_tab_bar/MotionTabBar.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:iconify_flutter/iconify_flutter.dart'; // Layered imports
+import 'package:awesome_dialog/awesome_dialog.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/di.dart';
 import '../../../core/geofence_config.dart';
+import '../../../core/utils/size_config.dart';
 import '../../../data/models/vehicle_model.dart';
 import '../../../logic/auth/auth_bloc.dart';
 import '../../../logic/auth/auth_event.dart';
@@ -109,7 +115,6 @@ class HomeScreen extends StatelessWidget {
                 style: theme.textTheme.bodyLarge?.copyWith(color: mutedText),
               ),
               const SizedBox(height: 40),
-
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
@@ -187,6 +192,10 @@ class CitizenDashboard extends StatefulWidget {
   State<CitizenDashboard> createState() => _CitizenDashboardState();
 }
 
+const String _bannerFeedUrl =
+    'https://raw.githubusercontent.com/ZigmaSoftware/iwms-banners/refs/heads/main/banners.json';
+const String _bannerCacheKey = 'citizen_banner_feed_v1';
+
 class _CitizenDashboardState extends State<CitizenDashboard>
     with SingleTickerProviderStateMixin {
   WastePeriod _selectedPeriod = WastePeriod.daily;
@@ -195,6 +204,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
   late final AnimationController _bellController;
   late final Animation<double> _bellSwing;
   int _activeBannerIndex = 0;
+  Timer? _bannerAutoSlideTimer;
   final MapController _trackMapController = MapController();
   LatLng? _lastPreviewCenter;
   final LatLng _gammaCenter = GammaGeofenceConfig.center;
@@ -212,7 +222,8 @@ class _CitizenDashboardState extends State<CitizenDashboard>
   final List<_CitizenAlert> _alerts = [];
   bool _hasUnreadNotifications = false;
   bool _wasVehicleInsideGamma = false;
-  final List<_BannerSlide> _bannerSlides = const [
+  late List<_BannerSlide> _bannerSlides;
+  static const List<_BannerSlide> _defaultBannerSlides = [
     _BannerSlide(
       chipLabel: 'Support',
       title: 'Report missed pickups instantly',
@@ -252,6 +263,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
   @override
   void initState() {
     super.initState();
+    _bannerSlides = List.of(_defaultBannerSlides);
     _notificationService = getIt<NotificationService>();
     _bannerPageController = PageController(viewportFraction: 0.92)
       ..addListener(_handleBannerScroll);
@@ -265,10 +277,13 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     ]).animate(
       CurvedAnimation(parent: _bellController, curve: Curves.easeInOut),
     );
+    _initializeBannerFeed();
+    _restartBannerAutoSlideTimer();
   }
 
   @override
   void dispose() {
+    _stopBannerAutoSlide();
     _bannerPageController
       ..removeListener(_handleBannerScroll)
       ..dispose();
@@ -289,6 +304,32 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     }
   }
 
+  void _restartBannerAutoSlideTimer() {
+    _stopBannerAutoSlide();
+    if (_bannerSlides.length <= 1) {
+      return;
+    }
+    _bannerAutoSlideTimer =
+        Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted ||
+          !_bannerPageController.hasClients ||
+          _bannerSlides.length <= 1) {
+        return;
+      }
+      final nextPage = (_activeBannerIndex + 1) % _bannerSlides.length;
+      _bannerPageController.animateToPage(
+        nextPage,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  void _stopBannerAutoSlide() {
+    _bannerAutoSlideTimer?.cancel();
+    _bannerAutoSlideTimer = null;
+  }
+
   void _showComingSoon(BuildContext context, String feature) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -297,12 +338,77 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     );
   }
 
+  void _showQrDialog(BuildContext context) {
+    final theme = Theme.of(context);
+    AwesomeDialog(
+      context: context,
+      dialogType: DialogType.noHeader,
+      animType: AnimType.scale,
+      dismissOnTouchOutside: true,
+      dismissOnBackKeyPress: true,
+      barrierColor: Colors.black.withOpacity(0.55),
+      body: Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.25),
+              blurRadius: 30,
+              offset: const Offset(0, 20),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'My Collection QR',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Show this code to your collector for instant verification.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 18),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Image.asset(
+                'assets/images/qr.png',
+                width: 240,
+                height: 240,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+              icon: const Icon(Icons.check),
+              label: const Text('Done'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ).show();
+  }
+
   void _handleBannerScroll() {
     final page = _bannerPageController.page?.round() ?? 0;
     if (page != _activeBannerIndex && mounted) {
       setState(() {
         _activeBannerIndex = page;
       });
+      _restartBannerAutoSlideTimer();
     }
   }
 
@@ -329,6 +435,163 @@ class _CitizenDashboardState extends State<CitizenDashboard>
             ? 1
             : 30;
     return divisor > 0 ? totalWeight / divisor : 0;
+  }
+
+  void _initializeBannerFeed() {
+    unawaited(_loadCachedBanners());
+    unawaited(_fetchRemoteBanners());
+  }
+
+  Future<void> _loadCachedBanners() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString(_bannerCacheKey);
+      if (cached == null) return;
+      final slides = _parseBannerFeed(cached);
+      if (slides.isNotEmpty && mounted) {
+        setState(() {
+          _bannerSlides = slides;
+          _activeBannerIndex = 0;
+        });
+        _restartBannerAutoSlideTimer();
+      }
+    } catch (error) {
+      debugPrint('Banner cache load failed: $error');
+    }
+  }
+
+  Future<void> _fetchRemoteBanners() async {
+    try {
+      final response = await http
+          .get(Uri.parse(_bannerFeedUrl))
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode != 200) {
+        debugPrint('Banner fetch failed with status ${response.statusCode}');
+        return;
+      }
+      final slides = _parseBannerFeed(response.body);
+      if (slides.isEmpty) return;
+      if (mounted) {
+        setState(() {
+          _bannerSlides = slides;
+          _activeBannerIndex = 0;
+        });
+        _restartBannerAutoSlideTimer();
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_bannerCacheKey, response.body);
+    } catch (error) {
+      debugPrint('Banner fetch failed: $error');
+    }
+  }
+
+  List<_BannerSlide> _parseBannerFeed(String rawJson) {
+    try {
+      final decoded = jsonDecode(rawJson);
+      final Iterable<dynamic>? items;
+      if (decoded is Map<String, dynamic>) {
+        items = decoded['items'] as Iterable<dynamic>?;
+      } else if (decoded is Iterable) {
+        items = decoded;
+      } else {
+        return const [];
+      }
+      if (items == null) return const [];
+
+      return items
+          .whereType<Map<String, dynamic>>()
+          .map((item) {
+            final String? title = (item['title'] as String?)?.trim();
+            if (title == null || title.isEmpty) return null;
+
+            final String subtitle = (item['subtitle'] as String?)?.trim() ?? '';
+            final String chipLabel =
+                (item['chipLabel'] as String?)?.trim().toUpperCase() ?? 'TIP';
+            final List<Color> colors = _parseColorList(item['colors']) ??
+                const [Color(0xFF1B5E20), Color(0xFF43A047)];
+            final IconData icon =
+                _iconFromName(item['icon'] as String?) ?? Icons.eco_outlined;
+            final String? imageUrl = (item['imageUrl'] as String?)?.trim();
+            final double? subtitleFontSize =
+                (item['subtitleFontSize'] as num?)?.toDouble();
+
+            return _BannerSlide(
+              chipLabel: chipLabel.isEmpty ? 'TIP' : chipLabel,
+              title: title,
+              subtitle: subtitle,
+              colors: colors,
+              icon: icon,
+              backgroundImage: imageUrl,
+              subtitleFontSize: subtitleFontSize,
+              isNetworkImage: imageUrl != null && imageUrl.startsWith('http'),
+            );
+          })
+          .whereType<_BannerSlide>()
+          .toList();
+    } catch (error) {
+      debugPrint('Banner parse failed: $error');
+      return const [];
+    }
+  }
+
+  List<Color>? _parseColorList(dynamic value) {
+    if (value is List) {
+      final colors = value
+          .map((entry) => _parseColorString(entry as String?))
+          .whereType<Color>()
+          .toList();
+      if (colors.length >= 2) return colors;
+      if (colors.length == 1) {
+        final base = colors.first;
+        return [base, base.withValues(alpha: 0.8)];
+      }
+    } else if (value is String) {
+      final color = _parseColorString(value);
+      if (color != null) {
+        return [color, color.withValues(alpha: 0.8)];
+      }
+    }
+    return null;
+  }
+
+  Color? _parseColorString(String? raw) {
+    if (raw == null) return null;
+    String value = raw.trim();
+    if (value.isEmpty) return null;
+    if (value.startsWith('#')) value = value.substring(1);
+    if (value.toLowerCase().startsWith('0x')) {
+      value = value.substring(2);
+    }
+    if (value.length == 6) {
+      value = 'FF$value';
+    }
+    if (value.length != 8) return null;
+    final int? parsed = int.tryParse(value, radix: 16);
+    if (parsed == null) return null;
+    return Color(parsed);
+  }
+
+  IconData? _iconFromName(String? name) {
+    if (name == null) return null;
+    switch (name.toLowerCase()) {
+      case 'support':
+      case 'help':
+        return Icons.support_agent;
+      case 'map':
+      case 'track':
+        return Icons.map_outlined;
+      case 'star':
+      case 'reward':
+        return Icons.star_rate_outlined;
+      case 'segregation':
+      case 'tips':
+        return Icons.auto_awesome;
+      case 'clean':
+      case 'eco':
+        return Icons.eco_outlined;
+      default:
+        return null;
+    }
   }
 
   Widget _buildCollectionStatsCard(
@@ -365,6 +628,11 @@ class _CitizenDashboardState extends State<CitizenDashboard>
         ],
       );
     }
+
+    final responsive = SizeConfig.of(context);
+    final double radialSize =
+        responsive.safeWidthPercent(0.24).clamp(100.0, 150.0);
+    final double rowGap = responsive.safeWidthPercent(0.035).clamp(10.0, 26.0);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -411,10 +679,10 @@ class _CitizenDashboardState extends State<CitizenDashboard>
             ],
           ),
         ),
-        const SizedBox(width: 20),
+        SizedBox(width: rowGap),
         SizedBox(
-          width: 120,
-          height: 120,
+          width: radialSize,
+          height: radialSize,
           child: _WasteRadialBreakdown(
             items: progressItems,
             totalValue: 100,
@@ -496,12 +764,33 @@ class _CitizenDashboardState extends State<CitizenDashboard>
   ) {
     final theme = Theme.of(context);
     final bool isDarkMode = theme.brightness == Brightness.dark;
+    final responsive = SizeConfig.of(context);
+    final double horizontalPadding =
+        responsive.safeWidthPercent(0.056).clamp(14.0, 30.0);
+    final double verticalPadding =
+        responsive.safeHeightPercent(0.02).clamp(12.0, 24.0);
+    final double avatarGap =
+        responsive.safeWidthPercent(0.035).clamp(10.0, 26.0);
+    final double headerSectionSpacing =
+        responsive.safeHeightPercent(0.02).clamp(12.0, 24.0);
+    final double bannerSpacing =
+        responsive.safeHeightPercent(0.02).clamp(12.0, 20.0);
+    final double quickActionSpacing =
+        responsive.safeHeightPercent(0.018).clamp(10.0, 18.0);
+    final double contentBottomPadding =
+        responsive.safeHeightPercent(0.04).clamp(20.0, 48.0);
+    final double contentHorizontalPadding =
+        responsive.safeWidthPercent(0.05).clamp(14.0, 28.0);
+    final double trailingSpacing =
+        responsive.safeHeightPercent(0.03).clamp(18.0, 40.0);
 
     return Column(
       children: [
         Container(
           width: double.infinity,
-          height: headerHeight,
+          constraints: BoxConstraints(
+            minHeight: headerHeight,
+          ),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: headerGradientColors,
@@ -524,9 +813,9 @@ class _CitizenDashboardState extends State<CitizenDashboard>
           ),
           clipBehavior: Clip.antiAlias,
           child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 20,
-              vertical: 18,
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: verticalPadding,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -549,14 +838,17 @@ class _CitizenDashboardState extends State<CitizenDashboard>
                           ),
                         ),
                         clipBehavior: Clip.antiAlias,
-                        child: Image.asset(
-                          'assets/gif/profile.gif',
-                          fit: BoxFit.cover,
-                          gaplessPlayback: true,
+                        child: Transform.scale(
+                          scale: 1.12,
+                          child: Image.asset(
+                            'assets/gif/profile.gif',
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    SizedBox(width: avatarGap),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -593,7 +885,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: headerSectionSpacing * 0.75),
                 _SectionCard(
                   surfaceColor: surfaceColor,
                   outlineColor: outlineColor,
@@ -610,7 +902,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: headerSectionSpacing),
         _BannerPager(
           controller: _bannerPageController,
           slides: _bannerSlides,
@@ -618,10 +910,15 @@ class _CitizenDashboardState extends State<CitizenDashboard>
           isDarkMode: isDarkMode,
           pageViewHeight: bannerHeight,
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: bannerSpacing),
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+            padding: EdgeInsets.fromLTRB(
+              contentHorizontalPadding,
+              0,
+              contentHorizontalPadding,
+              contentBottomPadding,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -632,15 +929,14 @@ class _CitizenDashboardState extends State<CitizenDashboard>
                     color: textColor,
                   ),
                 ),
-                const SizedBox(height: 14),
+                SizedBox(height: quickActionSpacing),
                 _QuickActionGrid(
                   actions: quickActions,
                   isDarkMode: isDarkMode,
                   surfaceColor: surfaceColor,
                   textColor: textColor,
-                  iconColor: highlightColor,
                 ),
-                const SizedBox(height: 72),
+                SizedBox(height: trailingSpacing),
               ],
             ),
           ),
@@ -693,7 +989,9 @@ class _CitizenDashboardState extends State<CitizenDashboard>
           children: [
             Container(
               width: double.infinity,
-              height: trackHeaderHeight,
+              constraints: BoxConstraints(
+                minHeight: trackHeaderHeight,
+              ),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: headerGradientColors,
@@ -1556,7 +1854,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
 
     final backgroundColor = isDarkMode
         ? CitizenDashboard._darkBackground
-        : CitizenDashboard._lightBackground;
+        : const Color.fromRGBO(235, 248, 239, 1);
     final surfaceColor =
         isDarkMode ? CitizenDashboard._darkSurface : Colors.white;
     final outlineColor = isDarkMode
@@ -1572,37 +1870,51 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     final quickActions = [
       _QuickAction(
         label: 'Track Vehicles',
-        icon: 'mdi:map-marker-path',
+        assetPath: 'assets/icons/track_vehicles.png',
         onTap: _openFleetTracking,
       ),
       _QuickAction(
         label: 'Collection Details',
-        icon: 'mdi:file-document-edit-outline',
+        assetPath: 'assets/icons/collection_details.png',
         onTap: () => context.go(AppRoutePaths.citizenDriverDetails),
       ),
       _QuickAction(
         label: 'Collection History',
-        icon: 'mdi:history',
+        assetPath: 'assets/icons/collectionhistory.png',
         onTap: () => context.go(AppRoutePaths.citizenHistory),
       ),
       _QuickAction(
         label: 'Raise Grievance',
-        icon: 'mdi:comment-alert-outline',
+        assetPath: 'assets/icons/raise_grievance.png',
         onTap: () => context.go(AppRoutePaths.citizenGrievanceChat),
       ),
       _QuickAction(
         label: 'Rate Collector',
-        icon: 'mdi:star-face',
+        assetPath: 'assets/icons/rate_collector.png',
         onTap: () => _showComingSoon(context, 'Rating feature'),
+      ),
+      _QuickAction(
+        label: 'QR',
+        assetPath: 'assets/icons/qr.png',
+        onTap: () => _showQrDialog(context),
+      ),
+      _QuickAction(
+        label: 'Upcoming Collection',
+        assetPath: 'assets/icons/upcoming_collection.png',
+        onTap: () => _showComingSoon(context, 'Upcoming collection schedule'),
       ),
     ];
 
-    final double screenHeight = MediaQuery.of(context).size.height;
-    final double headerHeight = math.min(screenHeight * 0.34, 360);
-    final double bannerHeight = math.min(headerHeight * 0.55, 190);
+    final responsive = SizeConfig.of(context);
+    final double headerHeight =
+        math.min(responsive.safeHeightPercent(0.36), 360);
+    final double bannerHeight = math.min(
+      headerHeight * 0.55,
+      math.min(responsive.safeHeightPercent(0.24), 190),
+    );
     final List<Color> headerGradientColors = isDarkMode
-        ? const [Color(0xFF0D3A16), Color(0xFF43A047)]
-        : const [Color(0xFF1B5E20), Color(0xFF66BB6A)];
+        ? const [Color.fromARGB(235, 248, 239, 1), Color.fromARGB(235, 248, 239, 1)]
+        : const [Color.fromARGB(235, 248, 239, 1), Color.fromARGB(235, 248, 239, 1)];
 
     final Widget tabBody = _buildTabBody(
       context,
@@ -1741,19 +2053,19 @@ const List<_WasteBarData> _collectionProgressItems = [
     label: 'Wet',
     valueLabel: '70% wet',
     value: 70,
-    color: Color(0xFF0D47A1),
+    color: Color(0xFF1E88E5),
   ),
   _WasteBarData(
     label: 'Dry',
     valueLabel: '60% dry',
     value: 60,
-    color: Color(0xFFBF360C),
+    color: Color(0xFF2E7D32),
   ),
   _WasteBarData(
     label: 'Mixed',
     valueLabel: '60% mixed',
     value: 60,
-    color: Color(0xFFB71C1C),
+    color: Color(0xFFC62828),
   ),
 ];
 
@@ -1879,7 +2191,7 @@ class _WasteRadialBreakdownState extends State<_WasteRadialBreakdown>
                         ),
                       ],
                     ),
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(6),
                     child: ClipOval(
                       child: Image.asset(
                         'assets/gif/dumpster.gif',
@@ -2038,14 +2350,12 @@ class _QuickActionGrid extends StatelessWidget {
     required this.isDarkMode,
     required this.surfaceColor,
     required this.textColor,
-    required this.iconColor,
   });
 
   final List<_QuickAction> actions;
   final bool isDarkMode;
   final Color surfaceColor;
   final Color textColor;
-  final Color iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -2095,12 +2405,11 @@ class _QuickActionGrid extends StatelessWidget {
                             color: isDarkMode
                                 ? surfaceColor.withValues(alpha: 0.5)
                                 : surfaceColor,
-                            child: Center(
-                              child: Iconify(
-                                action.icon,
-                                size: 28,
-                                color: iconColor,
-                              ),
+                            child: Image.asset(
+                              action.assetPath,
+                              fit: BoxFit.contain,
+                              width: double.infinity,
+                              height: double.infinity,
                             ),
                           ),
                         ),
@@ -2168,12 +2477,12 @@ class _SectionCard extends StatelessWidget {
 class _QuickAction {
   const _QuickAction({
     required this.label,
-    required this.icon,
+    required this.assetPath,
     required this.onTap,
   });
 
   final String label;
-  final String icon;
+  final String assetPath;
   final VoidCallback onTap;
 }
 
@@ -2186,6 +2495,7 @@ class _BannerSlide {
     required this.icon,
     this.backgroundImage,
     this.subtitleFontSize,
+    this.isNetworkImage = false,
   });
 
   final String chipLabel;
@@ -2195,6 +2505,7 @@ class _BannerSlide {
   final IconData icon;
   final String? backgroundImage;
   final double? subtitleFontSize;
+  final bool isNetworkImage;
 }
 
 class _BannerPager extends StatelessWidget {
@@ -2215,7 +2526,25 @@ class _BannerPager extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final responsive = SizeConfig.of(context);
     final double pageHeight = pageViewHeight ?? 180;
+    final double bannerHorizontalPadding =
+        responsive.safeWidthPercent(0.045).clamp(12.0, 28.0);
+    final double bannerVerticalPadding =
+        responsive.safeHeightPercent(0.02).clamp(10.0, 22.0);
+    final double chipGap =
+        responsive.safeHeightPercent(0.018).clamp(10.0, 22.0);
+    final double textGap = responsive.safeHeightPercent(0.01).clamp(6.0, 16.0);
+    final double iconGap = responsive.safeWidthPercent(0.03).clamp(10.0, 26.0);
+    final double indicatorSpacing =
+        responsive.safeWidthPercent(0.011).clamp(4.0, 10.0);
+    final double indicatorHeight =
+        responsive.safeHeightPercent(0.012).clamp(6.0, 12.0);
+    final double indicatorActiveWidth =
+        responsive.safeWidthPercent(0.08).clamp(20.0, 32.0);
+    final double indicatorInactiveWidth =
+        responsive.safeWidthPercent(0.03).clamp(8.0, 14.0);
+    final double indicatorRowGap = indicatorSpacing * 1.5;
 
     return Column(
       children: [
@@ -2228,7 +2557,13 @@ class _BannerPager extends StatelessWidget {
             itemBuilder: (context, index) {
               final slide = slides[index];
               final bool isFocused = index == currentIndex;
-              final bool hasImage = slide.backgroundImage != null;
+              final ImageProvider? backgroundProvider =
+                  slide.backgroundImage == null
+                      ? null
+                      : slide.isNetworkImage
+                          ? NetworkImage(slide.backgroundImage!)
+                          : AssetImage(slide.backgroundImage!) as ImageProvider;
+              final bool hasImage = backgroundProvider != null;
               return AnimatedContainer(
                 duration: const Duration(milliseconds: 260),
                 curve: Curves.easeOutCubic,
@@ -2244,16 +2579,16 @@ class _BannerPager extends StatelessWidget {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                  image: hasImage
-                      ? DecorationImage(
-                          image: AssetImage(slide.backgroundImage!),
+                  image: backgroundProvider == null
+                      ? null
+                      : DecorationImage(
+                          image: backgroundProvider,
                           fit: BoxFit.cover,
                           colorFilter: ColorFilter.mode(
                             Colors.black.withOpacity(0.35),
                             BlendMode.darken,
                           ),
-                        )
-                      : null,
+                        ),
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
@@ -2281,8 +2616,10 @@ class _BannerPager extends StatelessWidget {
                         ),
                       ),
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 18),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: bannerHorizontalPadding,
+                        vertical: bannerVerticalPadding,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -2302,24 +2639,26 @@ class _BannerPager extends StatelessWidget {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 16),
+                          SizedBox(height: chipGap),
                           Row(
                             children: [
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
+                                    AutoSizeText(
                                       slide.title,
                                       style: textTheme.titleLarge?.copyWith(
                                         color: Colors.white,
                                         fontWeight: FontWeight.w800,
                                       ),
                                       maxLines: 2,
+                                      minFontSize: 18,
+                                      maxFontSize: 28,
                                       overflow: TextOverflow.ellipsis,
                                     ),
-                                    const SizedBox(height: 8),
-                                    Text(
+                                    SizedBox(height: textGap),
+                                    AutoSizeText(
                                       slide.subtitle,
                                       style: textTheme.bodySmall?.copyWith(
                                         color: Colors.white
@@ -2328,12 +2667,13 @@ class _BannerPager extends StatelessWidget {
                                         fontSize: slide.subtitleFontSize ?? 12,
                                       ),
                                       maxLines: 2,
+                                      minFontSize: 10,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: 16),
+                              SizedBox(width: iconGap),
                               Icon(
                                 slide.icon,
                                 color: Colors.white,
@@ -2350,7 +2690,7 @@ class _BannerPager extends StatelessWidget {
             },
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: indicatorRowGap),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(slides.length, (index) {
@@ -2361,12 +2701,12 @@ class _BannerPager extends StatelessWidget {
                 isDarkMode ? Colors.white24 : Colors.black26;
             return AnimatedContainer(
               duration: const Duration(milliseconds: 220),
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              height: 6,
-              width: isActive ? 26 : 8,
+              margin: EdgeInsets.symmetric(horizontal: indicatorSpacing),
+              height: indicatorHeight,
+              width: isActive ? indicatorActiveWidth : indicatorInactiveWidth,
               decoration: BoxDecoration(
                 color: isActive ? activeColor : inactiveColor,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(indicatorHeight * 2),
               ),
             );
           }),
