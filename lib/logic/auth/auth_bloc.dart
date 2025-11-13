@@ -20,6 +20,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthCitizenLoginRequested>(_onCitizenLoginRequested);
     on<AuthCitizenRegisterRequested>(_onCitizenRegisterRequested);
     on<AuthLogoutRequested>(_onLogoutRequested);
+    on<AuthOperatorLoginRequested>(_onOperatorLoginRequested);
+
 
     initialization.then((_) {
       add(AuthStatusChecked());
@@ -37,6 +39,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       switch (user.role) {
         case 'citizen':
           emit(AuthStateAuthenticatedCitizen(userName: user.userName));
+          break;
+        case 'operator':
+          emit(AuthStateAuthenticatedOperator(userName: user.userName));
           break;
         default:
           await _authRepository.logout();
@@ -93,5 +98,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     await _authRepository.logout();
     emit(const AuthStateUnauthenticated());
   }
+Future<void> _onOperatorLoginRequested(
+  AuthOperatorLoginRequested event,
+  Emitter<AuthState> emit,
+) async {
+  emit(const AuthStateLoading());
+
+  final user = UserModel(
+    userId: event.operatorId,
+    userName: event.userName,
+    role: 'operator',
+    authToken: 'operator-token',
+  );
+
+  await _authRepository.saveUser(user);
+
+  emit(AuthStateAuthenticatedOperator(userName: user.userName));
+}
 
 }

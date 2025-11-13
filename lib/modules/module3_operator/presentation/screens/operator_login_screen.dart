@@ -1,8 +1,12 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 import 'operator_home_page.dart';
 
 class OperatorLoginScreen extends StatefulWidget {
@@ -47,33 +51,65 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen> {
     }
     throw Exception('Failed to login');
   }
+Future<void> _handleLogin() async {
+  FocusScope.of(context).unfocus();
+  setState(() => _isLoading = true);
 
-  Future<void> _handleLogin() async {
-    setState(() => _isLoading = true);
+  try {
+    final result = await _login(
+      _usernameController.text.trim(),
+      _passwordController.text.trim(),
+    );
 
-    try {
-      final result = await _login(
-        _usernameController.text.trim(),
-        _passwordController.text,
-      );
-      if (result['status'] == 1 && result['msg'] == 'success_login') {
-        if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const OperatorHomePage()),
-        );
-      } else {
-        final message = result['error'] ?? 'Login failed';
-        _showSnack(message.toString());
-      }
-    } catch (e) {
-      _showSnack('An unexpected error occurred.');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+    if (!mounted) return;
+
+   if (result['status'] == 1 && result['msg'] == 'success_login') {
+  context.read<AuthBloc>().add(
+    AuthOperatorLoginRequested(
+      userName: result['name'] ?? _usernameController.text.trim(),
+      operatorId: result['empid'].toString(),
+    ),
+  );
+
+  context.go('/operator-home');
+}
+
+     else {
+      _showSnack(result['error'] ?? "Invalid username or password");
     }
+  } catch (e) {
+    _showSnack("Something went wrong. Try again.");
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
   }
+}
+
+  // Future<void> _handleLogin() async {
+  //   setState(() => _isLoading = true);
+
+  //   try {
+  //     final result = await _login(
+  //       _usernameController.text.trim(),
+  //       _passwordController.text,
+  //     );
+  //     if (result['status'] == 1 && result['msg'] == 'success_login') {
+  //       if (!mounted) return;
+  //       Navigator.pushReplacement(
+  //         context,
+  //         MaterialPageRoute(builder: (_) => const OperatorHomePage()),
+  //       );
+  //     } else {
+  //       final message = result['error'] ?? 'Login failed';
+  //       _showSnack(message.toString());
+  //     }
+  //   } catch (e) {
+  //     _showSnack('An unexpected error occurred.');
+  //   } finally {
+  //     if (mounted) {
+  //       setState(() => _isLoading = false);
+  //     }
+  //   }
+  // }
 
   Future<void> _checkLocationServices() async {
     bool serviceEnabled;
@@ -200,7 +236,9 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen> {
                     width: double.infinity,
                     height: MediaQuery.of(context).size.height * 0.07,
                     child: ElevatedButton(
-                      onPressed: _handleLogin,
+                    
+                      onPressed:(){ _handleLogin();
+        },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         shape: RoundedRectangleBorder(

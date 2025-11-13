@@ -39,3 +39,12 @@ class AuthCitizenRegisterRequested extends AuthEvent {
 class AuthLogoutRequested extends AuthEvent {}
 
 class AuthStatusChecked extends AuthEvent {}
+class AuthOperatorLoginRequested extends AuthEvent {
+  final String userName;
+  final String operatorId;
+
+  AuthOperatorLoginRequested({
+    required this.userName,
+    required this.operatorId,
+  });
+}

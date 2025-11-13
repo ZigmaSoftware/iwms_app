@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'package:iwms_citizen_app/modules/module3_operator/services/location_service.dart';
@@ -35,45 +36,74 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
     }
   }
 
-  void _handleDetection(BarcodeCapture capture) async {
-    if (!_isScanning) return;
-    if (!_locationReady) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Fetching location... please wait")),
-        );
-      }
-      return;
-    }
+  // void _handleDetection(BarcodeCapture capture) async {
+  //   if (!_isScanning) return;
+  //   if (!_locationReady) {
+  //     if (mounted) {
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         const SnackBar(content: Text("Fetching location... please wait")),
+  //       );
+  //     }
+  //     return;
+  //   }
 
-    final barcode = capture.barcodes.first.rawValue ?? '';
-    if (barcode.isEmpty) return;
+  //   final barcode = capture.barcodes.first.rawValue ?? '';
+  //   if (barcode.isEmpty) return;
 
-    final navigator = Navigator.of(context);
-    setState(() => _isScanning = false);
+  //   final navigator = Navigator.of(context);
+  //   setState(() => _isScanning = false);
+  //   await _cameraController.stop();
+  //   if (!context.mounted) return;
+
+  //   final parsed = _parseQrData(barcode);
+  //   final customerId = parsed['Customer Id'] ?? 'Unknown';
+  //   final customerName = parsed['Owner Name'] ?? 'Unknown';
+  //   final contactNo = parsed['address'] ?? 'Unknown';
+
+  //   final lat = OperatorLocationService.latitude.toString();
+  //   final lon = OperatorLocationService.longitude.toString();
+
+  //   navigator.pushReplacement(
+  //     MaterialPageRoute(
+  //       builder: (_) => OperatorDataScreen(
+  //         customerId: customerId,
+  //         customerName: customerName,
+  //         contactNo: contactNo,
+  //         latitude: lat,
+  //         longitude: lon,
+  //       ),
+  //     ),
+  //   );
+  // }
+void _handleDetection(BarcodeCapture capture) async {
+  if (!_isScanning) return;
+  _isScanning = false;
+
+  final raw = capture.barcodes.first.rawValue ?? "";
+  if (raw.isEmpty) return;
+
+  try {
     await _cameraController.stop();
-    if (!context.mounted) return;
+  } catch (_) {}
 
-    final parsed = _parseQrData(barcode);
-    final customerId = parsed['Customer Id'] ?? 'Unknown';
-    final customerName = parsed['Owner Name'] ?? 'Unknown';
-    final contactNo = parsed['address'] ?? 'Unknown';
+  await Future.delayed(const Duration(milliseconds: 120));
 
-    final lat = OperatorLocationService.latitude.toString();
-    final lon = OperatorLocationService.longitude.toString();
+  if (!mounted) return;
 
-    navigator.pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => OperatorDataScreen(
-          customerId: customerId,
-          customerName: customerName,
-          contactNo: contactNo,
-          latitude: lat,
-          longitude: lon,
-        ),
-      ),
-    );
-  }
+  final parsed = _parseQrData(raw);
+
+context.push(
+  '/operator-data',
+  extra: {
+    'customerId': parsed['Customer Id'] ?? 'Unknown',
+    'customerName': parsed['Owner Name'] ?? 'Unknown',
+    'contactNo': parsed['address'] ?? 'Unknown',
+    'latitude': OperatorLocationService.latitude.toString(),
+    'longitude': OperatorLocationService.longitude.toString(),
+  },
+);
+
+}
 
   Map<String, String> _parseQrData(String data) {
     final map = <String, String>{};
