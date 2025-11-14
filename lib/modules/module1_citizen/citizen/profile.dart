@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../logic/auth/auth_bloc.dart';
 import '../../../logic/auth/auth_event.dart';
 import '../../../logic/theme/theme_cubit.dart';
 import '../../../router/app_router.dart';
 
-class ProfileScreen extends StatelessWidget {
+const String _languagePreferenceKey = 'profile_language_code';
+const String _fontScalePreferenceKey = 'profile_font_scale';
+
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     super.key,
     required this.userName,
@@ -15,10 +19,77 @@ class ProfileScreen extends StatelessWidget {
 
   final String userName;
 
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  static const List<_LanguageOption> _supportedLanguages = [
+    _LanguageOption(code: 'en', label: 'English (EN)'),
+    _LanguageOption(code: 'hi', label: 'Hindi (HI)'),
+    _LanguageOption(code: 'ml', label: 'Malayalam (ML)'),
+    _LanguageOption(code: 'ta', label: 'Tamil (TA)'),
+  ];
+
+  static const List<_FontSizeOption> _fontSizePresets = [
+    _FontSizeOption(label: 'Compact', scale: 0.9),
+    _FontSizeOption(label: 'Standard', scale: 1.0),
+    _FontSizeOption(label: 'Comfort', scale: 1.1),
+    _FontSizeOption(label: 'Large', scale: 1.2),
+  ];
+
+  late String _selectedLanguageCode = _supportedLanguages.first.code;
+  double _fontScale = 1.0;
+  SharedPreferences? _prefs;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _prefs = prefs;
+      _selectedLanguageCode =
+          prefs.getString(_languagePreferenceKey) ?? _selectedLanguageCode;
+      _fontScale = prefs.getDouble(_fontScalePreferenceKey) ?? 1.0;
+    });
+  }
+
   void _showComingSoon(BuildContext context, String feature) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('$feature is coming soon.')),
     );
+  }
+
+  void _showSavedSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+  }
+
+  Future<void> _onLanguageChanged(String code) async {
+    setState(() => _selectedLanguageCode = code);
+    await (_prefs ?? await SharedPreferences.getInstance())
+        .setString(_languagePreferenceKey, code);
+    final label =
+        _supportedLanguages.firstWhere((lang) => lang.code == code).label;
+    _showSavedSnack('Language preference set to $label');
+  }
+
+  Future<void> _onFontScaleChanged(double scale) async {
+    setState(() => _fontScale = scale);
+    await (_prefs ?? await SharedPreferences.getInstance())
+        .setDouble(_fontScalePreferenceKey, scale);
+    _showSavedSnack('Font size preference saved');
   }
 
   @override
@@ -91,9 +162,8 @@ class ProfileScreen extends StatelessWidget {
                         ),
                         padding: const EdgeInsets.all(12),
                         child: Image.asset(
-                          'assets/gif/profile.gif',
+                          'assets/icons/profile.png',
                           fit: BoxFit.cover,
-                          gaplessPlayback: true,
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -102,7 +172,7 @@ class ProfileScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Hi, $userName',
+                              'Hi, ${widget.userName}',
                               style: theme.textTheme.titleMedium?.copyWith(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700,
@@ -167,6 +237,22 @@ class ProfileScreen extends StatelessWidget {
                     textColor: textColor,
                     secondaryText: secondaryText,
                     highlightColor: highlightColor,
+                  ),
+                  _LanguageSettingsCard(
+                    textColor: textColor,
+                    secondaryText: secondaryText,
+                    highlightColor: highlightColor,
+                    options: _supportedLanguages,
+                    selectedCode: _selectedLanguageCode,
+                    onChanged: _onLanguageChanged,
+                  ),
+                  _FontSizeSettingsCard(
+                    textColor: textColor,
+                    secondaryText: secondaryText,
+                    highlightColor: highlightColor,
+                    options: _fontSizePresets,
+                    selectedScale: _fontScale,
+                    onChanged: _onFontScaleChanged,
                   ),
                   _ProfileOptionTile(
                     icon: Icons.feedback_outlined,
@@ -286,6 +372,229 @@ class _ProfileThemeToggle extends StatelessWidget {
   }
 }
 
+class _LanguageSettingsCard extends StatelessWidget {
+  const _LanguageSettingsCard({
+    required this.textColor,
+    required this.secondaryText,
+    required this.highlightColor,
+    required this.options,
+    required this.selectedCode,
+    required this.onChanged,
+  });
+
+  final Color textColor;
+  final Color secondaryText;
+  final Color highlightColor;
+  final List<_LanguageOption> options;
+  final String selectedCode;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final Color tileColor = theme.cardColor;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      elevation: theme.brightness == Brightness.dark ? 0 : 2,
+      color: tileColor,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Language',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: textColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: highlightColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Preview',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: highlightColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Pick the language you are most comfortable with. Content will adapt once localization is rolled out.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: secondaryText,
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: selectedCode,
+                isExpanded: true,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                items: options
+                    .map(
+                      (option) => DropdownMenuItem<String>(
+                        value: option.code,
+                        child: Text(
+                          option.label,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: textColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    onChanged(value);
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FontSizeSettingsCard extends StatelessWidget {
+  const _FontSizeSettingsCard({
+    required this.textColor,
+    required this.secondaryText,
+    required this.highlightColor,
+    required this.options,
+    required this.selectedScale,
+    required this.onChanged,
+  });
+
+  final Color textColor;
+  final Color secondaryText;
+  final Color highlightColor;
+  final List<_FontSizeOption> options;
+  final double selectedScale;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final Color tileColor = theme.cardColor;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      elevation: theme.brightness == Brightness.dark ? 0 : 2,
+      color: tileColor,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Font Size',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: textColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  _fontLabel(selectedScale),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: highlightColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Adjust how large text appears across the citizen experience.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: secondaryText,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 10,
+              children: options.map((option) {
+                final selected = option.scale == selectedScale;
+                return ChoiceChip(
+                  label: Text(option.label),
+                  selected: selected,
+                  onSelected: (_) => onChanged(option.scale),
+                  selectedColor: highlightColor.withValues(alpha: 0.15),
+                  backgroundColor: theme.brightness == Brightness.dark
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : Colors.black.withValues(alpha: 0.04),
+                  labelStyle: theme.textTheme.bodySmall?.copyWith(
+                    color: selected ? highlightColor : textColor,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'Aa',
+                    style: theme.textTheme.displaySmall?.copyWith(
+                      color: textColor,
+                      fontSize: 32 * selectedScale,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Sample text preview',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: secondaryText,
+                      fontSize: 12 * selectedScale,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _fontLabel(double scale) {
+    final option = options.firstWhere(
+      (opt) => opt.scale == scale,
+      orElse: () => _FontSizeOption(label: 'Custom', scale: scale),
+    );
+    return option.label;
+  }
+}
+
 class _LogoutTile extends StatelessWidget {
   const _LogoutTile({
     required this.textColor,
@@ -317,4 +626,24 @@ class _LogoutTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _LanguageOption {
+  const _LanguageOption({
+    required this.code,
+    required this.label,
+  });
+
+  final String code;
+  final String label;
+}
+
+class _FontSizeOption {
+  const _FontSizeOption({
+    required this.label,
+    required this.scale,
+  });
+
+  final String label;
+  final double scale;
 }
