@@ -12,8 +12,8 @@ private fun LibraryExtension.enforceSdkLevels() {
         if (targetSdk == null || targetSdk!! < 34) {
             targetSdk = 34
         }
-        if ((minSdk ?: 0) < 21) {
-            minSdk = 21
+        if ((minSdk ?: 0) < 23) {
+            minSdk = 23
         }
     }
     compileOptions {

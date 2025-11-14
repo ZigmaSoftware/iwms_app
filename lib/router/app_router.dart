@@ -9,6 +9,8 @@ import 'package:iwms_citizen_app/logic/vehicle_tracking/vehicle_bloc.dart';
 
 // --- Import all your screens ---
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/splashscreen.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_data_screen.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_home_page.dart';
 import 'package:iwms_citizen_app/presentation/user_selection/user_selection_screen.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/auth_intro.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/login.dart';
@@ -206,6 +208,33 @@ class AppRouter {
           );
         },
       ),
+          GoRoute(
+      path: '/operator-home',
+      builder: (context, state) => const OperatorHomePage(),
+    ),
+    GoRoute(
+  path: '/operator-data',
+  pageBuilder: (context, state) {
+    final data = state.extra as Map<String, dynamic>;
+    return CustomTransitionPage(
+      key: state.pageKey,
+      child: OperatorDataScreen(
+        customerId: data['customerId'],
+        customerName: data['customerName'],
+        contactNo: data['contactNo'],
+        latitude: data['latitude'],
+        longitude: data['longitude'],
+      ),
+      transitionsBuilder: (_, animation, __, child) {
+        return FadeTransition(
+          opacity: animation,
+          child: child,
+        );
+      },
+    );
+  },
+),
+
     ];
 
     router = GoRouter(
