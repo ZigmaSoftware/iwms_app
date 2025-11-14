@@ -631,8 +631,8 @@ class _CitizenDashboardState extends State<CitizenDashboard>
 
     final responsive = SizeConfig.of(context);
     final double radialSize =
-        responsive.safeWidthPercent(0.24).clamp(100.0, 150.0);
-    final double rowGap = responsive.safeWidthPercent(0.035).clamp(10.0, 26.0);
+        responsive.safeWidthPercent(0.22).clamp(90.0, 130.0);
+    final double rowGap = responsive.safeWidthPercent(0.028).clamp(8.0, 18.0);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -650,7 +650,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
                   fontSize: 20,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 'Average waste saving this month',
                 style: theme.textTheme.bodyMedium?.copyWith(
@@ -658,19 +658,19 @@ class _CitizenDashboardState extends State<CitizenDashboard>
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+                  horizontal: 12,
+                  vertical: 8,
                 ),
                 child: Wrap(
-                  spacing: 18,
-                  runSpacing: 8,
+                  spacing: 12,
+                  runSpacing: 6,
                   alignment: WrapAlignment.start,
                   children:
                       progressItems.map((item) => _buildSwatch(item)).toList(),
@@ -765,6 +765,21 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     final theme = Theme.of(context);
     final bool isDarkMode = theme.brightness == Brightness.dark;
     final responsive = SizeConfig.of(context);
+    final Color headerPrimaryTextColor =
+        isDarkMode ? Colors.white : Colors.black87;
+    final Color headerSecondaryTextColor =
+        isDarkMode ? Colors.white.withValues(alpha: 0.85) : Colors.black54;
+    final Color avatarBorderColor = isDarkMode
+        ? Colors.white.withValues(alpha: 0.35)
+        : Colors.black.withValues(alpha: 0.15);
+    final Color headerIconColor =
+        isDarkMode ? Colors.white : Colors.black87;
+    final Color headerIconBackground = isDarkMode
+        ? Colors.white.withValues(alpha: 0.15)
+        : Colors.black.withValues(alpha: 0.05);
+    final Color headerIconBorder = isDarkMode
+        ? Colors.white.withValues(alpha: 0.25)
+        : Colors.black.withValues(alpha: 0.1);
     final double horizontalPadding =
         responsive.safeWidthPercent(0.056).clamp(14.0, 30.0);
     final double verticalPadding =
@@ -786,32 +801,10 @@ class _CitizenDashboardState extends State<CitizenDashboard>
 
     return Column(
       children: [
-        Container(
-          width: double.infinity,
+        ConstrainedBox(
           constraints: BoxConstraints(
             minHeight: headerHeight,
           ),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: headerGradientColors,
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(32),
-              bottomRight: Radius.circular(32),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(
-                  isDarkMode ? 0.45 : 0.15,
-                ),
-                blurRadius: 30,
-                offset: const Offset(0, 12),
-              ),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
           child: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: horizontalPadding,
@@ -826,14 +819,12 @@ class _CitizenDashboardState extends State<CitizenDashboard>
                     GestureDetector(
                       onTap: () => context.go(AppRoutePaths.citizenProfile),
                       child: Container(
-                        width: 50,
-                        height: 50,
+                        width: 40,
+                        height: 40,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: Colors.white.withValues(
-                              alpha: 0.35,
-                            ),
+                            color: avatarBorderColor,
                             width: 2,
                           ),
                         ),
@@ -856,20 +847,18 @@ class _CitizenDashboardState extends State<CitizenDashboard>
                           Text(
                             'Home',
                             style: theme.textTheme.headlineSmall?.copyWith(
-                              color: Colors.white,
+                              color: headerPrimaryTextColor,
                               fontSize: 20,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 0.4,
                             ),
                           ),
                           if (showUserName) ...[
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 2),
                             Text(
                               normalizedName,
                               style: theme.textTheme.titleSmall?.copyWith(
-                                color: Colors.white.withValues(
-                                  alpha: 0.85,
-                                ),
+                                color: headerSecondaryTextColor,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -879,11 +868,19 @@ class _CitizenDashboardState extends State<CitizenDashboard>
                     ),
                     _buildNotificationBell(
                       context,
-                      iconColor: Colors.white,
-                      backgroundColor: Colors.white.withValues(alpha: 0.15),
-                      borderColor: Colors.white.withValues(alpha: 0.25),
+                      iconColor: headerIconColor,
+                      backgroundColor: headerIconBackground,
+                      borderColor: headerIconBorder,
                     ),
                   ],
+                ),
+                SizedBox(height: headerSectionSpacing * 0.75),
+                _BannerPager(
+                  controller: _bannerPageController,
+                  slides: _bannerSlides,
+                  currentIndex: _activeBannerIndex,
+                  isDarkMode: isDarkMode,
+                  pageViewHeight: bannerHeight,
                 ),
                 SizedBox(height: headerSectionSpacing * 0.75),
                 _SectionCard(
@@ -901,14 +898,6 @@ class _CitizenDashboardState extends State<CitizenDashboard>
               ],
             ),
           ),
-        ),
-        SizedBox(height: headerSectionSpacing),
-        _BannerPager(
-          controller: _bannerPageController,
-          slides: _bannerSlides,
-          currentIndex: _activeBannerIndex,
-          isDarkMode: isDarkMode,
-          pageViewHeight: bannerHeight,
         ),
         SizedBox(height: bannerSpacing),
         Expanded(
@@ -1734,6 +1723,8 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     required Color borderColor,
   }) {
     final hasAlerts = _alerts.isNotEmpty;
+    const double bellButtonSize = 33.6;
+    const double bellIconSize = 18.0;
 
     return AnimatedBuilder(
       animation: _bellController,
@@ -1768,6 +1759,12 @@ class _CitizenDashboardState extends State<CitizenDashboard>
               ),
               color: iconColor,
               tooltip: 'Notifications',
+              padding: EdgeInsets.zero,
+              constraints: BoxConstraints.tightFor(
+                width: bellButtonSize,
+                height: bellButtonSize,
+              ),
+              iconSize: bellIconSize,
               onPressed: () {
                 _openNotificationsSheet(context);
               },
@@ -1913,8 +1910,8 @@ class _CitizenDashboardState extends State<CitizenDashboard>
       math.min(responsive.safeHeightPercent(0.24), 190),
     );
     final List<Color> headerGradientColors = isDarkMode
-        ? const [Color.fromARGB(235, 248, 239, 1), Color.fromARGB(235, 248, 239, 1)]
-        : const [Color.fromARGB(235, 248, 239, 1), Color.fromARGB(235, 248, 239, 1)];
+        ? const [Color.fromARGB(235, 248, 239, 239), Color.fromARGB(235, 248, 239, 239)]
+        : const [Color.fromARGB(235, 248, 239, 239), Color.fromARGB(235, 248, 239, 239)];
 
     final Widget tabBody = _buildTabBody(
       context,
@@ -2065,7 +2062,7 @@ const List<_WasteBarData> _collectionProgressItems = [
     label: 'Mixed',
     valueLabel: '60% mixed',
     value: 60,
-    color: Color(0xFFC62828),
+    color: Color.fromARGB(255, 248, 139, 14),
   ),
 ];
 
@@ -2468,7 +2465,10 @@ class _SectionCard extends StatelessWidget {
           ),
         ],
       ),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 14,
+      ),
       child: child,
     );
   }
@@ -2564,127 +2564,145 @@ class _BannerPager extends StatelessWidget {
                           ? NetworkImage(slide.backgroundImage!)
                           : AssetImage(slide.backgroundImage!) as ImageProvider;
               final bool hasImage = backgroundProvider != null;
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 260),
+              const animationDuration = Duration(milliseconds: 260);
+              return AnimatedSlide(
+                duration: animationDuration,
                 curve: Curves.easeOutCubic,
-                margin: EdgeInsets.symmetric(
-                  horizontal: isFocused ? 4 : 10,
-                  vertical: isFocused ? 0 : 12,
-                ),
-                decoration: BoxDecoration(
-                  gradient: hasImage
-                      ? null
-                      : LinearGradient(
-                          colors: slide.colors,
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                  image: backgroundProvider == null
-                      ? null
-                      : DecorationImage(
-                          image: backgroundProvider,
-                          fit: BoxFit.cover,
-                          colorFilter: ColorFilter.mode(
-                            Colors.black.withOpacity(0.35),
-                            BlendMode.darken,
+                offset: isFocused ? Offset.zero : const Offset(0, 0.03),
+                child: AnimatedScale(
+                  duration: animationDuration,
+                  curve: Curves.easeOutCubic,
+                  scale: isFocused ? 1 : 0.94,
+                  child: AnimatedOpacity(
+                    duration: animationDuration,
+                    curve: Curves.easeOutCubic,
+                    opacity: isFocused ? 1 : 0.8,
+                    child: AnimatedContainer(
+                      duration: animationDuration,
+                      curve: Curves.easeOutCubic,
+                      margin: EdgeInsets.zero,
+                      decoration: BoxDecoration(
+                        gradient: hasImage
+                            ? null
+                            : LinearGradient(
+                                colors: slide.colors,
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                        image: backgroundProvider == null
+                            ? null
+                            : DecorationImage(
+                                image: backgroundProvider,
+                                fit: BoxFit.cover,
+                                colorFilter: ColorFilter.mode(
+                                  Colors.black.withOpacity(0.35),
+                                  BlendMode.darken,
+                                ),
+                              ),
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: slide.colors.last.withValues(alpha: 0.25),
+                            blurRadius: isFocused ? 30 : 10,
+                            offset: const Offset(0, 16),
                           ),
-                        ),
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: slide.colors.last.withValues(alpha: 0.25),
-                      blurRadius: isFocused ? 30 : 10,
-                      offset: const Offset(0, 16),
-                    ),
-                  ],
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (hasImage)
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.black.withOpacity(isFocused ? 0.35 : 0.45),
-                              Colors.black.withOpacity(0.15),
-                            ],
-                            begin: Alignment.bottomCenter,
-                            end: Alignment.topCenter,
-                          ),
-                        ),
+                        ],
                       ),
-                    Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: bannerHorizontalPadding,
-                        vertical: bannerVerticalPadding,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      clipBehavior: Clip.antiAlias,
+                      child: Stack(
+                        fit: StackFit.expand,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Text(
-                              slide.chipLabel.toUpperCase(),
-                              style: textTheme.labelSmall?.copyWith(
-                                color: Colors.white,
-                                letterSpacing: 0.6,
-                                fontWeight: FontWeight.w700,
+                          if (hasImage)
+                            Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.black
+                                        .withOpacity(isFocused ? 0.35 : 0.45),
+                                    Colors.black.withOpacity(0.15),
+                                  ],
+                                  begin: Alignment.bottomCenter,
+                                  end: Alignment.topCenter,
+                                ),
                               ),
                             ),
-                          ),
-                          SizedBox(height: chipGap),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    AutoSizeText(
-                                      slide.title,
-                                      style: textTheme.titleLarge?.copyWith(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                      maxLines: 2,
-                                      minFontSize: 18,
-                                      maxFontSize: 28,
-                                      overflow: TextOverflow.ellipsis,
+                          Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: bannerHorizontalPadding,
+                              vertical: bannerVerticalPadding,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: Text(
+                                    slide.chipLabel.toUpperCase(),
+                                    style: textTheme.labelSmall?.copyWith(
+                                      color: Colors.white,
+                                      letterSpacing: 0.6,
+                                      fontWeight: FontWeight.w700,
                                     ),
-                                    SizedBox(height: textGap),
-                                    AutoSizeText(
-                                      slide.subtitle,
-                                      style: textTheme.bodySmall?.copyWith(
-                                        color: Colors.white
-                                            .withValues(alpha: 0.85),
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: slide.subtitleFontSize ?? 12,
+                                  ),
+                                ),
+                                SizedBox(height: chipGap),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          AutoSizeText(
+                                            slide.title,
+                                            style:
+                                                textTheme.titleLarge?.copyWith(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                            maxLines: 2,
+                                            minFontSize: 18,
+                                            maxFontSize: 28,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          SizedBox(height: textGap),
+                                          AutoSizeText(
+                                            slide.subtitle,
+                                            style:
+                                                textTheme.bodySmall?.copyWith(
+                                              color: Colors.white
+                                                  .withValues(alpha: 0.85),
+                                              fontWeight: FontWeight.w600,
+                                              fontSize:
+                                                  slide.subtitleFontSize ?? 12,
+                                            ),
+                                            maxLines: 2,
+                                            minFontSize: 10,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
                                       ),
-                                      maxLines: 2,
-                                      minFontSize: 10,
-                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    SizedBox(width: iconGap),
+                                    Icon(
+                                      slide.icon,
+                                      color: Colors.white,
+                                      size: 38,
                                     ),
                                   ],
                                 ),
-                              ),
-                              SizedBox(width: iconGap),
-                              Icon(
-                                slide.icon,
-                                color: Colors.white,
-                                size: 38,
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               );
             },
