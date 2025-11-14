@@ -610,46 +610,52 @@ class _MapScreenState extends State<MapScreen> {
     final theme = Theme.of(context);
     final hasSelection =
         state is VehicleLoaded && state.selectedVehicle != null;
-    final bottomOffset = hasSelection ? 180.0 : 24.0;
+    final double safeBottom = MediaQuery.of(context).padding.bottom;
+    final double bottomOffset = 16.0 + safeBottom;
 
     return Positioned(
       bottom: bottomOffset,
       left: 16,
-      child: Container(
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface.withValues(alpha: 0.95),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 14,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Wrap(
-          spacing: 8,
-          children: _mapThemes.entries.map((entry) {
-            final option = entry.key;
-            final config = entry.value;
-            final isSelected = _selectedTheme == option;
-
-            return ChoiceChip(
-              label: Text(config.label),
-              selected: isSelected,
-              onSelected: (selected) {
-                if (selected) {
-                  _setTheme(option);
-                }
-              },
-              selectedColor: theme.colorScheme.primary,
-              labelStyle: theme.textTheme.bodyMedium?.copyWith(
-                color: isSelected ? Colors.white : theme.colorScheme.onSurface,
-                fontWeight: FontWeight.w600,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 280),
+        child: Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface.withValues(alpha: 0.95),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 14,
+                offset: const Offset(0, 8),
               ),
-            );
-          }).toList(),
+            ],
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Wrap(
+            spacing: 8,
+            alignment: WrapAlignment.start,
+            children: _mapThemes.entries.map((entry) {
+              final option = entry.key;
+              final config = entry.value;
+              final isSelected = _selectedTheme == option;
+
+              return ChoiceChip(
+                label: Text(config.label),
+                selected: isSelected,
+                onSelected: (selected) {
+                  if (selected) {
+                    _setTheme(option);
+                  }
+                },
+                selectedColor: theme.colorScheme.primary,
+                labelStyle: theme.textTheme.bodyMedium?.copyWith(
+                  color:
+                      isSelected ? Colors.white : theme.colorScheme.onSurface,
+                  fontWeight: FontWeight.w600,
+                ),
+              );
+            }).toList(),
+          ),
         ),
       ),
     );

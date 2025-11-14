@@ -7,7 +7,10 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
-import 'operator_home_page.dart';
+
+const Color _operatorPrimary = Color(0xFF1B5E20);
+const Color _operatorAccent = Color(0xFF66BB6A);
+const Color _operatorBackground = Color(0xFFF3F6F2);
 
 class OperatorLoginScreen extends StatefulWidget {
   const OperatorLoginScreen({super.key});
@@ -192,71 +195,30 @@ Future<void> _handleLogin() async {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final size = MediaQuery.of(context).size;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: _operatorBackground,
       body: SafeArea(
         child: Stack(
           children: [
             SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              padding: const EdgeInsets.only(bottom: 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(height: MediaQuery.of(context).size.height * 0.1),
-                  Center(
-                    child: Image.asset(
-                      'asset/images/logo.png',
-                      height: MediaQuery.of(context).size.height * 0.2,
-                    ),
-                  ),
-                  SizedBox(height: MediaQuery.of(context).size.height * 0.02),
-                  const _FieldLabel('Username'),
-                  TextField(
-                    controller: _usernameController,
-                    decoration: _inputDecoration,
-                  ),
-                  const SizedBox(height: 20),
-                  const _FieldLabel('Password'),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: _obscureText,
-                    decoration: _inputDecoration.copyWith(
-                      suffixIcon: GestureDetector(
-                        onTap: () =>
-                            setState(() => _obscureText = !_obscureText),
-                        child: Icon(
-                          _obscureText ? Icons.visibility : Icons.visibility_off,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-                  SizedBox(
-                    width: double.infinity,
-                    height: MediaQuery.of(context).size.height * 0.07,
-                    child: ElevatedButton(
-                    
-                      onPressed:(){ _handleLogin();
-        },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      child: const Text(
-                        'LOGIN',
-                        style: TextStyle(fontSize: 12, color: Colors.white),
-                      ),
-                    ),
+                  _buildHeroHeader(size, theme),
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                    child: _buildLoginCard(theme),
                   ),
                 ],
               ),
             ),
             if (_isLoading)
               const Center(
-                child: CircularProgressIndicator(),
+                child: CircularProgressIndicator(color: _operatorPrimary),
               ),
           ],
         ),
@@ -264,20 +226,152 @@ Future<void> _handleLogin() async {
     );
   }
 
-  InputDecoration get _inputDecoration => const InputDecoration(
-        fillColor: Color.fromRGBO(240, 240, 240, 1),
+  Widget _buildHeroHeader(Size size, ThemeData theme) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [_operatorPrimary, _operatorAccent],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(32),
+          bottomRight: Radius.circular(32),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: size.height * 0.12,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Image.asset(
+                'asset/images/logo.png',
+                height: size.height * 0.1,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Operator Console',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Access secure weighment & scanning tools in one tap.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: Colors.white.withOpacity(0.9),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoginCard(ThemeData theme) {
+    return Card(
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Sign in to continue',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const _FieldLabel('Username'),
+            TextField(
+              controller: _usernameController,
+              decoration: _inputDecoration.copyWith(
+                hintText: 'Enter your operator ID',
+              ),
+            ),
+            const SizedBox(height: 20),
+            const _FieldLabel('Password'),
+            TextField(
+              controller: _passwordController,
+              obscureText: _obscureText,
+              decoration: _inputDecoration.copyWith(
+                hintText: 'Enter your password',
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscureText ? Icons.visibility : Icons.visibility_off,
+                  ),
+                  color: Colors.grey.shade600,
+                  onPressed: () => setState(() {
+                    _obscureText = !_obscureText;
+                  }),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Contact your supervisor to reset password.'),
+                    ),
+                  );
+                },
+                child: const Text('Forgot password?'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _handleLogin,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _operatorPrimary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+                child: const Text(
+                  'LOGIN',
+                  style: TextStyle(
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  InputDecoration get _inputDecoration => InputDecoration(
         filled: true,
+        fillColor: Colors.grey.shade100,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: Colors.black.withOpacity(0.08)),
+        ),
         enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: Color.fromRGBO(186, 186, 186, 1)),
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: Colors.black.withOpacity(0.08)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: Color.fromRGBO(186, 186, 186, 1)),
-        ),
-        border: OutlineInputBorder(
-          borderSide: BorderSide(color: Color.fromRGBO(186, 186, 186, 1)),
-        ),
-        disabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: Color.fromRGBO(186, 186, 186, 1)),
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: _operatorPrimary, width: 1.4),
         ),
       );
 }

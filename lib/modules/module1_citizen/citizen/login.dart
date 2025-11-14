@@ -109,12 +109,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   if (state is AuthStateFailure) {
                     _showSnack(state.message, Colors.red);
                   }
-                  if (state is AuthStateAuthenticatedCitizen) {
-                    _showSnack(
-                      'Welcome back, ${state.userName ?? 'citizen'}!',
-                      const Color(0xFF1B5E20),
-                    );
-                  }
                 },
                 builder: (context, state) {
                   final bool isLoading = state is AuthStateLoading;
@@ -348,28 +342,48 @@ class _LoginCard extends StatelessWidget {
                       },
                     ),
                     const SizedBox(height: 12),
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      alignment: WrapAlignment.spaceBetween,
                       children: [
-                        Checkbox.adaptive(
-                          value: rememberMe,
-                          activeColor: _primaryGreen,
-                          onChanged: isSubmitting ? null : onRememberMeChanged,
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Checkbox.adaptive(
+                              value: rememberMe,
+                              activeColor: _primaryGreen,
+                              onChanged: isSubmitting ? null : onRememberMeChanged,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Remember me',
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Remember me',
-                          style: textTheme.bodyMedium?.copyWith(
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const Spacer(),
-                        TextButton(
-                          onPressed: isSubmitting ? null : onForgotPassword,
-                          child: const Text(
-                            'Forgot password?',
-                            style: TextStyle(
-                              color: _primaryGreen,
-                              fontWeight: FontWeight.w600,
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 180),
+                          child: TextButton(
+                            onPressed: isSubmitting ? null : onForgotPassword,
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              alignment: Alignment.centerRight,
+                            ),
+                            child: const Text(
+                              'Forgot password?',
+                              style: TextStyle(
+                                color: _primaryGreen,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 2,
+                              softWrap: true,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.right,
                             ),
                           ),
                         ),

@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:io' show File;
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants.dart';
 import '../../../core/di.dart';
 import '../../../shared/models/collection_history.dart';
 import '../../../shared/services/collection_history_service.dart';
+import '../../../router/app_router.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -88,6 +90,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
         title: const Text('Collection History'),
         backgroundColor: kPrimaryColor,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppRoutePaths.citizenHome);
+            }
+          },
+        ),
       ),
       body: ValueListenableBuilder<List<CollectionHistoryEntry>>(
         valueListenable: _historyService.entriesNotifier,

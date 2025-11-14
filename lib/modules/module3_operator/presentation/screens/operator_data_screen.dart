@@ -731,7 +731,6 @@
 // }
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -743,6 +742,9 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/bluetooth_service.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/image_compress_service.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/unique_id_service.dart';
+
+const Color _operatorPrimary = Color(0xFF1B5E20);
+const Color _operatorAccent = Color(0xFF66BB6A);
 
 class OperatorDataScreen extends StatefulWidget {
   final String customerId;
@@ -1323,7 +1325,7 @@ bool _btEnableRequested = false;
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color.fromRGBO(0, 61, 125, 0.8),
+        backgroundColor: _operatorPrimary,
         title: const Text("Customer Details"),
       ),
       body: _bluetoothError != null
@@ -1338,15 +1340,27 @@ bool _btEnableRequested = false;
                   children: [
                     Container(
                       width: double.infinity,
-                      color: Colors.blueGrey.shade50,
                       padding: const EdgeInsets.symmetric(
-                          vertical: 12, horizontal: 16),
+                        vertical: 16,
+                        horizontal: 18,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [_operatorPrimary, _operatorAccent],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
+                        borderRadius: const BorderRadius.only(
+                          bottomLeft: Radius.circular(16),
+                          bottomRight: Radius.circular(16),
+                        ),
+                      ),
                       child: Text(
                         "Live Weight: ${latestWeight == '--' ? '--' : '$latestWeight kg'}",
                         style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -1369,11 +1383,13 @@ bool _btEnableRequested = false;
                                 ? const CircularProgressIndicator()
                                 : ElevatedButton(
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color.fromRGBO(
-                                          0, 61, 125, 0.8),
+                                      backgroundColor: _operatorPrimary,
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 40,
-                                        vertical: 12,
+                                        vertical: 14,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
                                       ),
                                     ),
                                     onPressed: _submitForm,
@@ -1382,6 +1398,7 @@ bool _btEnableRequested = false;
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontSize: 16,
+                                        fontWeight: FontWeight.w700,
                                       ),
                                     ),
                                   ),
