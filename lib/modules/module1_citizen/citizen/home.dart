@@ -197,7 +197,6 @@ class CitizenDashboard extends StatefulWidget {
 const String _bannerFeedUrl =
     'https://raw.githubusercontent.com/ZigmaSoftware/iwms-banners/refs/heads/main/banners.json';
 const String _bannerCacheKey = 'citizen_banner_feed_v1';
-const String _introSeenKey = 'citizen_intro_seen_v1';
 
 class _CitizenDashboardState extends State<CitizenDashboard>
     with SingleTickerProviderStateMixin {
@@ -1453,6 +1452,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     context.push(AppRoutePaths.citizenMap);
   }
 
+
   Future<void> _showWasteInfo(_WasteVisualCard card) async {
     if (!mounted) return;
     await showModalBottomSheet<void>(
@@ -1769,7 +1769,13 @@ class _CitizenDashboardState extends State<CitizenDashboard>
         data: theme,
         child: Scaffold(
           backgroundColor: backgroundColor,
-          body: isMapTab ? tabBody : SafeArea(child: tabBody),
+          body: Stack(
+            children: [
+              Positioned.fill(
+                child: isMapTab ? tabBody : SafeArea(child: tabBody),
+              ),
+            ],
+          ),
           bottomNavigationBar: SafeArea(
             child: MotionTabBar(
               labels: const ['Home', 'Track', 'Map', 'Profile'],
@@ -3088,3 +3094,4 @@ class _BannerPager extends StatelessWidget {
     );
   }
 }
+

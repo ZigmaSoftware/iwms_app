@@ -69,6 +69,7 @@ flutter:
     - assets/rive/
     - assets/banner/
     - asset/images/
+    - assets/intro/
 
   fonts:
     - family: Montserrat
