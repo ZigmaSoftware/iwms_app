@@ -75,7 +75,7 @@ class UserSelectionScreen extends StatelessWidget {
                       icon: Icons.person,
                       title: "Citizen",
                       onTap: () {
-                        context.push(AppRoutePaths.citizenAuthIntro);
+                        context.push(AppRoutePaths.citizenIntroSlides);
                       },
                       iconColor: primaryColor,
                     ),
