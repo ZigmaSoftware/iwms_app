@@ -30,6 +30,7 @@ dependencies:
   auto_size_text: ^3.0.0
   awesome_dialog: ^3.1.0
   shared_preferences: ^2.5.3 
+  graphic: ^2.5.0
 
   # --- Module 1 (Citizen) Packages ---
   flutter_map: ^7.0.1          # <-- UPGRADED
@@ -68,6 +69,7 @@ flutter:
     - assets/rive/
     - assets/banner/
     - asset/images/
+    - assets/intro/
 
   fonts:
     - family: Montserrat

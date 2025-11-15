@@ -29,8 +29,8 @@ class CitizenAuthIntroScreen extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withValues(alpha: 0.65),
-                    Colors.black.withValues(alpha: 0.45),
+                    Colors.black.withOpacity(0.65),
+                    Colors.black.withOpacity(0.45),
                   ],
                 ),
               ),
@@ -46,11 +46,11 @@ class CitizenAuthIntroScreen extends StatelessWidget {
                     width: 72,
                     height: 72,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.9),
+                      color: Colors.white.withOpacity(0.9),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.15),
+                          color: Colors.black.withOpacity(0.15),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         ),

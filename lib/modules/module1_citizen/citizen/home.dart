@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter, PointerDeviceKind;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -10,10 +11,11 @@ import 'package:auto_size_text/auto_size_text.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:motion_tab_bar/MotionTabBar.dart';
-import 'package:flutter_map/flutter_map.dart';
+import 'package:graphic/graphic.dart' as graphic;
 import 'package:awesome_dialog/awesome_dialog.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'alloted_vehicle_map.dart';
 import '../../../core/di.dart';
 import '../../../core/geofence_config.dart';
 import '../../../core/utils/size_config.dart';
@@ -201,13 +203,13 @@ class _CitizenDashboardState extends State<CitizenDashboard>
   WastePeriod _selectedPeriod = WastePeriod.daily;
   _BottomNavItem _activeNavItem = _BottomNavItem.home;
   late final PageController _bannerPageController;
+  late final PageController _wasteCardController;
   late final AnimationController _bellController;
   late final Animation<double> _bellSwing;
   int _activeBannerIndex = 0;
   Timer? _bannerAutoSlideTimer;
-  final MapController _trackMapController = MapController();
-  LatLng? _lastPreviewCenter;
-  final LatLng _gammaCenter = GammaGeofenceConfig.center;
+  double _wasteCarouselPage = 0;
+  WasteTrendRange _selectedTrendRange = WasteTrendRange.monthly;
 
   final Map<WastePeriod, _WasteStats> _wasteStats = const {
     WastePeriod.daily:
@@ -267,6 +269,8 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     _notificationService = getIt<NotificationService>();
     _bannerPageController = PageController(viewportFraction: 0.92)
       ..addListener(_handleBannerScroll);
+    _wasteCardController = PageController(viewportFraction: 0.92)
+      ..addListener(_handleWasteCarouselScroll);
     _bellController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -286,6 +290,9 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     _stopBannerAutoSlide();
     _bannerPageController
       ..removeListener(_handleBannerScroll)
+      ..dispose();
+    _wasteCardController
+      ..removeListener(_handleWasteCarouselScroll)
       ..dispose();
     _bellController.dispose();
     super.dispose();
@@ -410,6 +417,15 @@ class _CitizenDashboardState extends State<CitizenDashboard>
       });
       _restartBannerAutoSlideTimer();
     }
+  }
+
+  void _handleWasteCarouselScroll() {
+    if (!mounted || !_wasteCardController.hasClients) return;
+    final double page =
+        _wasteCardController.page ?? _wasteCarouselPage;
+    setState(() {
+      _wasteCarouselPage = page;
+    });
   }
 
   void _onBottomNavTap(_BottomNavItem item) {
@@ -704,6 +720,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     Color secondaryTextColor,
     Color highlightColor,
     List<Color> headerGradientColors,
+    List<Color> sectionHeaderGradientColors,
     _WasteStats stats,
     List<_QuickAction> quickActions,
     String normalizedName,
@@ -714,15 +731,17 @@ class _CitizenDashboardState extends State<CitizenDashboard>
         return _buildTrackTab(
           context,
           headerHeight,
-          headerGradientColors,
+          sectionHeaderGradientColors,
           textColor,
           highlightColor,
         );
+      case _BottomNavItem.map:
+        return const CitizenAllotedVehicleMapScreen();
       case _BottomNavItem.profile:
         return _buildProfileTab(
           context,
           headerHeight,
-          headerGradientColors,
+          sectionHeaderGradientColors,
           normalizedName,
           highlightColor,
           textColor,
@@ -800,10 +819,11 @@ class _CitizenDashboardState extends State<CitizenDashboard>
         responsive.safeHeightPercent(0.03).clamp(18.0, 40.0);
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ConstrainedBox(
           constraints: BoxConstraints(
-            minHeight: headerHeight,
+            maxHeight: headerHeight,
           ),
           child: Padding(
             padding: EdgeInsets.symmetric(
@@ -811,13 +831,15 @@ class _CitizenDashboardState extends State<CitizenDashboard>
               vertical: verticalPadding,
             ),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     GestureDetector(
-                      onTap: () => context.go(AppRoutePaths.citizenProfile),
+                      onTap: () =>
+                          context.push(AppRoutePaths.citizenProfile),
                       child: Container(
                         width: 40,
                         height: 40,
@@ -874,28 +896,32 @@ class _CitizenDashboardState extends State<CitizenDashboard>
                     ),
                   ],
                 ),
-                SizedBox(height: headerSectionSpacing * 0.75),
-                _BannerPager(
-                  controller: _bannerPageController,
-                  slides: _bannerSlides,
-                  currentIndex: _activeBannerIndex,
-                  isDarkMode: isDarkMode,
-                  pageViewHeight: bannerHeight,
-                ),
-                SizedBox(height: headerSectionSpacing * 0.75),
-                _SectionCard(
-                  surfaceColor: surfaceColor,
-                  outlineColor: outlineColor,
-                  isDarkMode: isDarkMode,
-                  child: _buildCollectionStatsCard(
-                    context,
-                    isDarkMode: isDarkMode,
-                    textColor: textColor,
-                    secondaryTextColor: secondaryTextColor,
-                    stats: stats,
-                  ),
-                ),
+                SizedBox(height: headerSectionSpacing * 0.4),
               ],
+            ),
+          ),
+        ),
+        SizedBox(height: headerSectionSpacing * 0.25),
+        _BannerPager(
+          controller: _bannerPageController,
+          slides: _bannerSlides,
+          currentIndex: _activeBannerIndex,
+          isDarkMode: isDarkMode,
+          pageViewHeight: bannerHeight,
+        ),
+        SizedBox(height: headerSectionSpacing * 0.5),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+          child: _SectionCard(
+            surfaceColor: surfaceColor,
+            outlineColor: outlineColor,
+            isDarkMode: isDarkMode,
+            child: _buildCollectionStatsCard(
+              context,
+              isDarkMode: isDarkMode,
+              textColor: textColor,
+              secondaryTextColor: secondaryTextColor,
+              stats: stats,
             ),
           ),
         ),
@@ -941,381 +967,114 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     Color textColor,
     Color highlightColor,
   ) {
-    final trackHeaderHeight = math.min(headerHeight * 0.6, 200.0);
+    final theme = Theme.of(context);
+    final responsive = SizeConfig.of(context);
+    final double horizontalPadding =
+        responsive.safeWidthPercent(0.05).clamp(16.0, 28.0);
+    final double topSpacing =
+        responsive.safeHeightPercent(0.025).clamp(14.0, 28.0);
+    final double cardHeight =
+        responsive.safeHeightPercent(0.34).clamp(220.0, 320.0);
+    final double bottomPadding =
+        responsive.safeHeightPercent(0.12).clamp(70.0, 140.0);
+    final Color subtitleColor =
+        theme.colorScheme.onSurface.withValues(alpha: 0.65);
 
-    return BlocBuilder<VehicleBloc, VehicleState>(
-      builder: (context, state) {
-        final theme = Theme.of(context);
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        horizontalPadding,
+        topSpacing,
+        horizontalPadding,
+        bottomPadding,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Track Your Waste',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w900,
+              color: textColor,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Monitor wet, dry and mixed collection streams with immersive visuals.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: subtitleColor,
+            ),
+          ),
+          SizedBox(height: topSpacing),
+          SizedBox(
+            height: cardHeight,
+            child: _buildWasteCardCarousel(),
+          ),
+          SizedBox(height: topSpacing * 0.8),
+          _buildWasteTrendChart(
+            context,
+            highlightColor,
+            subtitleColor,
+          ),
+        ],
+      ),
+    );
+  }
 
-        final placeholderColor = theme.colorScheme.onSurfaceVariant;
-
-        final vehicles =
-            state is VehicleLoaded ? state.vehicles : const <VehicleModel>[];
-        final vehiclesInGamma = _vehiclesInsideGamma(vehicles);
-
-        final vehicleCount = vehiclesInGamma.length;
-
-        final previewCenter = vehiclesInGamma.isNotEmpty
-            ? LatLng(
-                vehiclesInGamma.first.latitude,
-                vehiclesInGamma.first.longitude,
-              )
-            : _gammaCenter;
-
-        final previewZoom = vehiclesInGamma.isNotEmpty ? 15.0 : 13.2;
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-
-          if (_lastPreviewCenter != previewCenter) {
-            _trackMapController.move(previewCenter, previewZoom);
-
-            _lastPreviewCenter = previewCenter;
-          }
-        });
-
-        return Column(
-          children: [
-            Container(
-              width: double.infinity,
-              constraints: BoxConstraints(
-                minHeight: trackHeaderHeight,
-              ),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: headerGradientColors,
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(32),
-                  bottomRight: Radius.circular(32),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.18),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.2),
-                      ),
-                      child: Icon(
-                        Icons.map_outlined,
-                        size: 26,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'Track Your Assigned Collector',
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Only vehicles inside ${GammaGeofenceConfig.name} are shown for your ward.',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: Colors.white.withOpacity(0.85),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+  Widget _buildWasteCardCarousel() {
+    return PageView.builder(
+      controller: _wasteCardController,
+      physics: const BouncingScrollPhysics(),
+      itemCount: _wasteVisualCards.length,
+      itemBuilder: (context, index) {
+        final card = _wasteVisualCards[index];
+        final double depth = (_wasteCarouselPage - index).abs();
+        final double translationY = (depth * 32).clamp(0, 56);
+        final double scale = (1 - depth * 0.08).clamp(0.88, 1.0);
+        final double opacity = (1 - depth * 0.25).clamp(0.5, 1.0);
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Transform.translate(
+            offset: Offset(0, translationY),
+            child: Transform.scale(
+              scale: scale,
+              alignment: Alignment.topCenter,
+              child: Opacity(
+                opacity: opacity,
+                child: _WasteHeroCard(
+                  card: card,
+                  onInfoTap: () => _showWasteInfo(card),
                 ),
               ),
             ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 120),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Live Vehicle Status',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: textColor,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildTrackMapPreview(
-                      context,
-                      vehiclesInGamma,
-                      highlightColor,
-                      previewCenter,
-                      previewZoom,
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      '$vehicleCount vehicle${vehicleCount == 1 ? '' : 's'} currently inside ${GammaGeofenceConfig.name}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: placeholderColor,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Vehicle details',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: textColor,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    if (vehiclesInGamma.isEmpty)
-                      Card(
-                        margin: EdgeInsets.zero,
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Text(
-                            'No vehicles are inside ${GammaGeofenceConfig.name} right now. We will show them here as soon as one is detected.',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: placeholderColor,
-                            ),
-                          ),
-                        ),
-                      )
-                    else
-                      Column(
-                        children: vehiclesInGamma
-                            .map(
-                              (vehicle) => _buildVehicleDetailCard(
-                                context,
-                                vehicle,
-                                highlightColor,
-                                placeholderColor,
-                              ),
-                            )
-                            .toList(),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+          ),
         );
       },
     );
   }
 
-  Widget _buildTrackMapPreview(
+  Widget _buildWasteTrendChart(
     BuildContext context,
-    List<VehicleModel> vehiclesInGamma,
     Color highlightColor,
-    LatLng center,
-    double zoom,
+    Color subtitleColor,
   ) {
     final theme = Theme.of(context);
-    final outlineColor = theme.colorScheme.outline.withOpacity(0.35);
-    final markers = vehiclesInGamma.map((vehicle) {
-      return Marker(
-        width: 40,
-        height: 40,
-        point: LatLng(vehicle.latitude, vehicle.longitude),
-        child: Container(
-          decoration: BoxDecoration(
-            color: highlightColor,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.25),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: const Center(
-            child: Icon(Icons.location_on, color: Colors.white, size: 18),
-          ),
-        ),
-      );
-    }).toList();
+    final Color outline = theme.colorScheme.outline.withOpacity(0.25);
+    final Color surface = theme.colorScheme.surface;
+    final chartData =
+        _wasteTrendDataset[_selectedTrendRange] ?? const <Map<String, Object>>[];
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        height: 240,
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: outlineColor),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 12),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            FlutterMap(
-              mapController: _trackMapController,
-              options: MapOptions(
-                initialCenter: center,
-                initialZoom: zoom,
-                minZoom: 11,
-                maxZoom: 18,
-              ),
-              children: [
-                TileLayer(
-                  urlTemplate:
-                      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  subdomains: const ['a', 'b', 'c'],
-                ),
-                PolygonLayer(
-                  polygons: [
-                    Polygon(
-                      points: GammaGeofenceConfig.polygon,
-                      borderColor: highlightColor.withOpacity(0.6),
-                      color: highlightColor.withOpacity(0.18),
-                      borderStrokeWidth: 2.4,
-                    ),
-                  ],
-                ),
-                if (markers.isNotEmpty) MarkerLayer(markers: markers),
-              ],
-            ),
-            Positioned(
-              top: 12,
-              right: 12,
-              child: FloatingActionButton.small(
-                heroTag: 'track_map_maximize',
-                onPressed: () =>
-                    context.go(AppRoutePaths.citizenAllotedVehicleMap),
-                backgroundColor: highlightColor,
-                child: const Icon(Icons.open_in_full, size: 18),
-              ),
-            ),
-            if (vehiclesInGamma.isEmpty)
-              Positioned.fill(
-                child: Container(
-                  color: Colors.black.withOpacity(0.28),
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Text(
-                    'Waiting for your assigned collector to enter ${GammaGeofenceConfig.name}.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: Colors.white.withOpacity(0.85),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVehicleDetailCard(
-    BuildContext context,
-    VehicleModel vehicle,
-    Color highlightColor,
-    Color placeholderColor,
-  ) {
-    final theme = Theme.of(context);
-    final sectionColor =
-        context.read<VehicleBloc>().getStatusColor(vehicle.status);
-    final registration = vehicle.registrationNumber ?? 'Vehicle ${vehicle.id}';
-    final driverName = vehicle.driverName ?? 'Driver info pending';
-    final statusLabel = vehicle.status ?? 'Unknown';
-    final updatedAt = vehicle.lastUpdated ?? 'Updated moments ago';
-    final areaLabel = vehicle.address ?? '${GammaGeofenceConfig.name} ward';
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: theme.brightness == Brightness.dark ? 0 : 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: sectionColor.withOpacity(0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.directions_bus, size: 20, color: sectionColor),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    registration,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    driverName,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: placeholderColor,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Status: $statusLabel',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: placeholderColor,
-                        ),
-                      ),
-                      Text(
-                        updatedAt,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: placeholderColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    areaLabel,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: placeholderColor,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+    return _WasteTrendVisualizer(
+      chartData: chartData,
+      subtitleColor: subtitleColor,
+      outlineColor: outline,
+      surfaceColor: surface,
+      highlightColor: highlightColor,
+      selectedRange: _selectedTrendRange,
+      onRangeChanged: (range) {
+        setState(() {
+          _selectedTrendRange = range;
+        });
+      },
     );
   }
 
@@ -1394,7 +1153,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
                 context,
                 icon: Icons.description_outlined,
                 label: 'Collection Details',
-                onTap: () => context.go(AppRoutePaths.citizenDriverDetails),
+                onTap: () => context.push(AppRoutePaths.citizenDriverDetails),
                 textColor: textColor,
                 highlightColor: highlightColor,
               ),
@@ -1402,7 +1161,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
                 context,
                 icon: Icons.history,
                 label: 'Collection History & Weighment',
-                onTap: () => context.go(AppRoutePaths.citizenHistory),
+                onTap: () => context.push(AppRoutePaths.citizenHistory),
                 textColor: textColor,
                 highlightColor: highlightColor,
               ),
@@ -1410,7 +1169,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
                 context,
                 icon: Icons.location_on_outlined,
                 label: 'Track My Waste',
-                onTap: () => _onBottomNavTap(_BottomNavItem.track),
+                onTap: () => _onBottomNavTap(_BottomNavItem.map),
                 textColor: textColor,
                 highlightColor: highlightColor,
               ),
@@ -1418,7 +1177,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
                 context,
                 icon: Icons.feedback_outlined,
                 label: 'Raise Grievance (Help Desk)',
-                onTap: () => context.go(AppRoutePaths.citizenGrievanceChat),
+                onTap: () => context.push(AppRoutePaths.citizenGrievanceChat),
                 textColor: textColor,
                 highlightColor: highlightColor,
               ),
@@ -1558,26 +1317,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
 
       _notificationService.showCollectorNearbyNotification(message: message);
 
-      if (mounted) {
-        final theme = Theme.of(listenContext);
-        ScaffoldMessenger.of(listenContext)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              behavior: SnackBarBehavior.floating,
-              backgroundColor: theme.colorScheme.primary,
-              content: Text(
-                'Next collection is nearing ${GammaGeofenceConfig.name}. '
-                'Please segregate your waste.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              duration: const Duration(seconds: 4),
-            ),
-          );
-      }
+      // Removed snackbar to keep notification subtle
     }
 
     _wasVehicleInsideGamma = hasVehicleInside;
@@ -1594,10 +1334,6 @@ class _CitizenDashboardState extends State<CitizenDashboard>
         address.contains(GammaGeofenceConfig.addressHint);
 
     return flaggedByProvider && GammaGeofenceConfig.isNear(position);
-  }
-
-  List<VehicleModel> _vehiclesInsideGamma(List<VehicleModel> vehicles) {
-    return vehicles.where(_isInsideGammaFence).toList(growable: false);
   }
 
   Future<void> _openNotificationsSheet(BuildContext context) async {
@@ -1708,12 +1444,100 @@ class _CitizenDashboardState extends State<CitizenDashboard>
       _hasUnreadNotifications = false;
     });
     _toggleBellAnimation(false);
-    context.go(AppRoutePaths.citizenAllotedVehicleMap);
+    context.push(AppRoutePaths.citizenAllotedVehicleMap);
   }
 
   void _openFleetTracking() {
     if (!mounted) return;
-    context.go(AppRoutePaths.citizenMap);
+    context.push(AppRoutePaths.citizenMap);
+  }
+
+
+  Future<void> _showWasteInfo(_WasteVisualCard card) async {
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final Color accent = card.accentColor;
+        final bottomInset = MediaQuery.of(sheetContext).padding.bottom;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(24, 20, 24, 20 + bottomInset),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      card.title,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Types: ${card.tagline}',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                card.description,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  color: accent.withOpacity(0.08),
+                  border: Border.all(color: accent.withOpacity(0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.lightbulb_outline, color: accent),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Segregation tip',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: accent,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Keep the listed materials ready in separate bins to help our crew lift faster.',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildNotificationBell(
@@ -1873,17 +1697,17 @@ class _CitizenDashboardState extends State<CitizenDashboard>
       _QuickAction(
         label: 'Collection Details',
         assetPath: 'assets/icons/collection_details.png',
-        onTap: () => context.go(AppRoutePaths.citizenDriverDetails),
+        onTap: () => context.push(AppRoutePaths.citizenDriverDetails),
       ),
       _QuickAction(
         label: 'Collection History',
         assetPath: 'assets/icons/collectionhistory.png',
-        onTap: () => context.go(AppRoutePaths.citizenHistory),
+        onTap: () => context.push(AppRoutePaths.citizenHistory),
       ),
       _QuickAction(
         label: 'Raise Grievance',
         assetPath: 'assets/icons/raise_grievance.png',
-        onTap: () => context.go(AppRoutePaths.citizenGrievanceChat),
+        onTap: () => context.push(AppRoutePaths.citizenGrievanceChat),
       ),
       _QuickAction(
         label: 'Rate Collector',
@@ -1912,6 +1736,9 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     final List<Color> headerGradientColors = isDarkMode
         ? const [Color.fromARGB(235, 248, 239, 239), Color.fromARGB(235, 248, 239, 239)]
         : const [Color.fromARGB(235, 248, 239, 239), Color.fromARGB(235, 248, 239, 239)];
+    final List<Color> sectionHeaderGradientColors = isDarkMode
+        ? const [Color(0xFF0D3A16), Color(0xFF43A047)]
+        : const [Color(0xFF1B5E20), Color(0xFF66BB6A)];
 
     final Widget tabBody = _buildTabBody(
       context,
@@ -1923,11 +1750,13 @@ class _CitizenDashboardState extends State<CitizenDashboard>
       secondaryTextColor,
       highlightColor,
       headerGradientColors,
+      sectionHeaderGradientColors,
       stats,
       quickActions,
       normalizedName,
       showUserName,
     );
+    final bool isMapTab = _activeNavItem == _BottomNavItem.map;
 
     return BlocListener<VehicleBloc, VehicleState>(
       listenWhen: (previous, current) => current is VehicleLoaded,
@@ -1940,14 +1769,19 @@ class _CitizenDashboardState extends State<CitizenDashboard>
         data: theme,
         child: Scaffold(
           backgroundColor: backgroundColor,
-          body: SafeArea(
-            child: tabBody,
+          body: Stack(
+            children: [
+              Positioned.fill(
+                child: isMapTab ? tabBody : SafeArea(child: tabBody),
+              ),
+            ],
           ),
           bottomNavigationBar: SafeArea(
             child: MotionTabBar(
-              labels: const ['Home', 'Map', 'Profile'],
+              labels: const ['Home', 'Track', 'Map', 'Profile'],
               icons: const [
                 Icons.home_outlined,
+                Icons.delete_outline,
                 Icons.map_outlined,
                 Icons.person_outline,
               ],
@@ -1980,19 +1814,544 @@ class _CitizenDashboardState extends State<CitizenDashboard>
 
 enum WastePeriod { daily, monthly, yearly }
 
-enum _BottomNavItem { home, track, profile }
+enum _BottomNavItem { home, track, map, profile }
 
 const List<_BottomNavItem> _orderedNavItems = [
   _BottomNavItem.home,
   _BottomNavItem.track,
+  _BottomNavItem.map,
   _BottomNavItem.profile,
 ];
+
+enum WasteTrendRange { daily, weekly, monthly, yearly }
+
+extension WasteTrendRangeLabel on WasteTrendRange {
+  String get label {
+    switch (this) {
+      case WasteTrendRange.daily:
+        return 'Daily';
+      case WasteTrendRange.weekly:
+        return 'Weekly';
+      case WasteTrendRange.monthly:
+        return 'Monthly';
+      case WasteTrendRange.yearly:
+        return 'Yearly';
+    }
+  }
+}
+
+class _WasteVisualCard {
+  const _WasteVisualCard({
+    required this.title,
+    required this.tagline,
+    required this.description,
+    required this.assetPath,
+    required this.accentColor,
+  });
+
+  final String title;
+  final String tagline;
+  final String description;
+  final String assetPath;
+  final Color accentColor;
+}
+
+const List<_WasteVisualCard> _wasteVisualCards = [
+  _WasteVisualCard(
+    title: 'Wet Waste',
+    tagline: 'Organic & compostable',
+    description:
+        'Sorted kitchen scraps and food leftovers ready to become nutrient rich compost.',
+    assetPath: 'assets/cards/wetwaste.png',
+    accentColor: Color(0xFF42A5F5),
+  ),
+  _WasteVisualCard(
+    title: 'Dry Waste',
+    tagline: 'Paper • Plastic • Metal',
+    description:
+        'Clean recyclables stacked for faster pickup ensuring better resale value.',
+    assetPath: 'assets/cards/drywaste.png',
+    accentColor: Color(0xFF2E7D32),
+  ),
+  _WasteVisualCard(
+    title: 'Mixed Waste',
+    tagline: 'Requires sorting',
+    description:
+        'Residual waste waiting for final inspection before dispatch to the landfill.',
+    assetPath: 'assets/cards/mixedwaste.png',
+    accentColor: Color(0xFFFFB74D),
+  ),
+];
+
+const List<Color> _wasteChartPalette = [
+  Color(0xFF42A5F5),
+  Color(0xFF2E7D32),
+  Color(0xFFFFB74D),
+];
+
+const Map<WasteTrendRange, List<Map<String, Object>>> _wasteTrendDataset = {
+  WasteTrendRange.daily: [
+    {'period': 'Mon', 'type': 'Wet', 'value': 1.2},
+    {'period': 'Mon', 'type': 'Dry', 'value': 0.8},
+    {'period': 'Mon', 'type': 'Mixed', 'value': 0.4},
+    {'period': 'Tue', 'type': 'Wet', 'value': 1.0},
+    {'period': 'Tue', 'type': 'Dry', 'value': 0.9},
+    {'period': 'Tue', 'type': 'Mixed', 'value': 0.5},
+    {'period': 'Wed', 'type': 'Wet', 'value': 1.4},
+    {'period': 'Wed', 'type': 'Dry', 'value': 1.0},
+    {'period': 'Wed', 'type': 'Mixed', 'value': 0.6},
+    {'period': 'Thu', 'type': 'Wet', 'value': 1.1},
+    {'period': 'Thu', 'type': 'Dry', 'value': 0.85},
+    {'period': 'Thu', 'type': 'Mixed', 'value': 0.45},
+    {'period': 'Fri', 'type': 'Wet', 'value': 1.35},
+    {'period': 'Fri', 'type': 'Dry', 'value': 0.95},
+    {'period': 'Fri', 'type': 'Mixed', 'value': 0.5},
+    {'period': 'Sat', 'type': 'Wet', 'value': 1.5},
+    {'period': 'Sat', 'type': 'Dry', 'value': 1.1},
+    {'period': 'Sat', 'type': 'Mixed', 'value': 0.55},
+    {'period': 'Sun', 'type': 'Wet', 'value': 1.0},
+    {'period': 'Sun', 'type': 'Dry', 'value': 0.7},
+    {'period': 'Sun', 'type': 'Mixed', 'value': 0.4},
+  ],
+  WasteTrendRange.weekly: [
+    {'period': 'Week 1', 'type': 'Wet', 'value': 7.1},
+    {'period': 'Week 1', 'type': 'Dry', 'value': 5.2},
+    {'period': 'Week 1', 'type': 'Mixed', 'value': 2.1},
+    {'period': 'Week 2', 'type': 'Wet', 'value': 7.6},
+    {'period': 'Week 2', 'type': 'Dry', 'value': 5.4},
+    {'period': 'Week 2', 'type': 'Mixed', 'value': 2.4},
+    {'period': 'Week 3', 'type': 'Wet', 'value': 7.9},
+    {'period': 'Week 3', 'type': 'Dry', 'value': 5.6},
+    {'period': 'Week 3', 'type': 'Mixed', 'value': 2.3},
+    {'period': 'Week 4', 'type': 'Wet', 'value': 8.2},
+    {'period': 'Week 4', 'type': 'Dry', 'value': 5.8},
+    {'period': 'Week 4', 'type': 'Mixed', 'value': 2.5},
+  ],
+  WasteTrendRange.monthly: [
+    {'period': 'Jan', 'type': 'Wet', 'value': 31},
+    {'period': 'Jan', 'type': 'Dry', 'value': 21},
+    {'period': 'Jan', 'type': 'Mixed', 'value': 10},
+    {'period': 'Feb', 'type': 'Wet', 'value': 29},
+    {'period': 'Feb', 'type': 'Dry', 'value': 22},
+    {'period': 'Feb', 'type': 'Mixed', 'value': 9},
+    {'period': 'Mar', 'type': 'Wet', 'value': 33},
+    {'period': 'Mar', 'type': 'Dry', 'value': 23},
+    {'period': 'Mar', 'type': 'Mixed', 'value': 11},
+    {'period': 'Apr', 'type': 'Wet', 'value': 34},
+    {'period': 'Apr', 'type': 'Dry', 'value': 24},
+    {'period': 'Apr', 'type': 'Mixed', 'value': 10},
+    {'period': 'May', 'type': 'Wet', 'value': 32},
+    {'period': 'May', 'type': 'Dry', 'value': 25},
+    {'period': 'May', 'type': 'Mixed', 'value': 12},
+    {'period': 'Jun', 'type': 'Wet', 'value': 35},
+    {'period': 'Jun', 'type': 'Dry', 'value': 26},
+    {'period': 'Jun', 'type': 'Mixed', 'value': 13},
+  ],
+  WasteTrendRange.yearly: [
+    {'period': '2021', 'type': 'Wet', 'value': 380},
+    {'period': '2021', 'type': 'Dry', 'value': 270},
+    {'period': '2021', 'type': 'Mixed', 'value': 120},
+    {'period': '2022', 'type': 'Wet', 'value': 395},
+    {'period': '2022', 'type': 'Dry', 'value': 290},
+    {'period': '2022', 'type': 'Mixed', 'value': 130},
+    {'period': '2023', 'type': 'Wet', 'value': 410},
+    {'period': '2023', 'type': 'Dry', 'value': 305},
+    {'period': '2023', 'type': 'Mixed', 'value': 138},
+    {'period': '2024', 'type': 'Wet', 'value': 428},
+    {'period': '2024', 'type': 'Dry', 'value': 320},
+    {'period': '2024', 'type': 'Mixed', 'value': 142},
+  ],
+};
+
+class _WasteTrendVisualizer extends StatefulWidget {
+  const _WasteTrendVisualizer({
+    required this.chartData,
+    required this.subtitleColor,
+    required this.outlineColor,
+    required this.surfaceColor,
+    required this.highlightColor,
+    required this.selectedRange,
+    required this.onRangeChanged,
+  });
+
+  final List<Map<String, Object>> chartData;
+  final Color subtitleColor;
+  final Color outlineColor;
+  final Color surfaceColor;
+  final Color highlightColor;
+  final WasteTrendRange selectedRange;
+  final ValueChanged<WasteTrendRange> onRangeChanged;
+
+  @override
+  State<_WasteTrendVisualizer> createState() => _WasteTrendVisualizerState();
+}
+
+class _WasteTrendVisualizerState extends State<_WasteTrendVisualizer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final wave = Curves.easeInOut.transform(_controller.value);
+        final glowColor =
+            widget.highlightColor.withOpacity(0.18 + wave * 0.12);
+        final accent = widget.highlightColor.withOpacity(0.08 + (1 - wave) * 0.1);
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                widget.surfaceColor,
+                widget.surfaceColor.withOpacity(0.94),
+                widget.surfaceColor.withOpacity(0.88),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: widget.outlineColor),
+            boxShadow: [
+              BoxShadow(
+                color: glowColor,
+                blurRadius: 38,
+                offset: const Offset(0, 18),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                top: -80 + wave * 24,
+                right: -40,
+                child: _GlowingBlob(
+                  size: 220 + wave * 30,
+                  color: glowColor,
+                  rotation: wave * 0.9,
+                ),
+              ),
+              Positioned(
+                bottom: -90 - wave * 20,
+                left: -30,
+                child: _GlowingBlob(
+                  size: 210 - wave * 40,
+                  color: accent,
+                  rotation: -wave * 0.7,
+                ),
+              ),
+              child!,
+            ],
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Collection trends',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: widget.outlineColor),
+                    color: widget.surfaceColor.withOpacity(0.85),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<WasteTrendRange>(
+                      value: widget.selectedRange,
+                      dropdownColor: widget.surfaceColor,
+                      items: WasteTrendRange.values
+                          .map(
+                            (range) => DropdownMenuItem(
+                              value: range,
+                              child: Text(range.label),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (range) {
+                        if (range != null) {
+                          widget.onRangeChanged(range);
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Compare wet, dry and mixed waste for the selected period.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: widget.subtitleColor,
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              height: 260,
+              child: _buildChart(theme),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChart(ThemeData theme) {
+    if (widget.chartData.isEmpty) {
+      return Center(
+        child: Text(
+          'No data for this range',
+          style: theme.textTheme.bodyMedium,
+        ),
+      );
+    }
+
+    final palette = _wasteChartPalette
+        .map((color) => color.withOpacity(0.9))
+        .toList(growable: false);
+
+    return graphic.Chart(
+      data: widget.chartData,
+      variables: {
+        'period': graphic.Variable(
+          accessor: (Map map) => map['period'] as String,
+        ),
+        'value': graphic.Variable(
+          accessor: (Map map) => map['value'] as num,
+          scale: graphic.LinearScale(min: 0, niceRange: true),
+        ),
+        'type': graphic.Variable(
+          accessor: (Map map) => map['type'] as String,
+        ),
+      },
+      marks: [
+        graphic.IntervalMark(
+          position: graphic.Varset('period') * graphic.Varset('value'),
+          color: graphic.ColorEncode(
+            variable: 'type',
+            values: palette,
+          ),
+          size: graphic.SizeEncode(value: 12),
+          modifiers: [
+            graphic.DodgeModifier(ratio: 0.35),
+          ],
+          shape: graphic.ShapeEncode(
+            value: graphic.RectShape(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        graphic.LineMark(
+          position: graphic.Varset('period') * graphic.Varset('value'),
+          color: graphic.ColorEncode(
+            variable: 'type',
+            values: _wasteChartPalette,
+          ),
+          size: graphic.SizeEncode(value: 3.2),
+          shape: graphic.ShapeEncode(
+            value: graphic.BasicLineShape(smooth: true),
+          ),
+        ),
+        graphic.PointMark(
+          position: graphic.Varset('period') * graphic.Varset('value'),
+          color: graphic.ColorEncode(
+            variable: 'type',
+            values: _wasteChartPalette,
+          ),
+          size: graphic.SizeEncode(value: 7),
+        ),
+      ],
+      axes: [
+        graphic.Defaults.horizontalAxis,
+        graphic.Defaults.verticalAxis,
+      ],
+      selections: {
+        'hover': graphic.PointSelection(
+          on: {graphic.GestureType.hover, graphic.GestureType.tap},
+          devices: {PointerDeviceKind.mouse, PointerDeviceKind.touch},
+        ),
+      },
+      tooltip: graphic.TooltipGuide(
+        followPointer: const [true, true],
+        align: Alignment.topLeft,
+        backgroundColor: widget.surfaceColor,
+      ),
+    );
+  }
+}
+
+class _GlowingBlob extends StatelessWidget {
+  const _GlowingBlob({
+    required this.size,
+    required this.color,
+    required this.rotation,
+  });
+
+  final double size;
+  final Color color;
+  final double rotation;
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.rotate(
+      angle: rotation,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [
+              color,
+              color.withOpacity(0),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WasteHeroCard extends StatelessWidget {
+  const _WasteHeroCard({
+    required this.card,
+    required this.onInfoTap,
+  });
+
+  final _WasteVisualCard card;
+  final VoidCallback onInfoTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: card.accentColor.withOpacity(0.25),
+            blurRadius: 30,
+            offset: const Offset(0, 18),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(32),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.asset(
+              card.assetPath,
+              fit: BoxFit.cover,
+            ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.black.withOpacity(0.35),
+                    card.accentColor.withOpacity(0.08),
+                  ],
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 18,
+              right: 18,
+              child: _GlassInfoButton(onTap: onInfoTap),
+            ),
+            Positioned(
+              left: 24,
+              right: 24,
+              bottom: 28,
+              child: Text(
+                card.title,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.6,
+                  shadows: const [
+                    Shadow(
+                      color: Colors.black54,
+                      blurRadius: 18,
+                      offset: Offset(0, 6),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassInfoButton extends StatelessWidget {
+  const _GlassInfoButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipOval(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Material(
+          color: Colors.white.withOpacity(0.2),
+          child: InkWell(
+            onTap: onTap,
+            child: const SizedBox(
+              width: 38,
+              height: 38,
+              child: Icon(
+                Icons.info_outline,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 String _navLabel(_BottomNavItem item) {
   switch (item) {
     case _BottomNavItem.home:
       return 'Home';
     case _BottomNavItem.track:
+      return 'Track';
+    case _BottomNavItem.map:
       return 'Map';
     case _BottomNavItem.profile:
       return 'Profile';
@@ -2003,8 +2362,10 @@ _BottomNavItem? _navItemFromLabel(String label) {
   switch (label) {
     case 'Home':
       return _BottomNavItem.home;
-    case 'Map':
+    case 'Track':
       return _BottomNavItem.track;
+    case 'Map':
+      return _BottomNavItem.map;
     case 'Profile':
       return _BottomNavItem.profile;
     default:
@@ -2733,3 +3094,4 @@ class _BannerPager extends StatelessWidget {
     );
   }
 }
+

@@ -26,11 +26,13 @@ import 'package:iwms_citizen_app/modules/module1_citizen/citizen/personal_map.da
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/alloted_vehicle_map.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/grievance_chat.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_login_screen.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/citizen_intro_slides.dart';
 
 // --- Define static route paths ---
 class AppRoutePaths {
   static const String splash = '/';
   static const String selectUser = '/select-user';
+  static const String citizenIntroSlides = '/citizen/intro';
   static const String citizenAuthIntro = '/citizen/auth';
   static const String citizenLogin = '/citizen/login';
   static const String citizenRegister = '/citizen/register';
@@ -70,6 +72,11 @@ class AppRouter {
         path: AppRoutePaths.selectUser,
         pageBuilder: (context, state) =>
             _buildTransitionPage(state, const UserSelectionScreen()),
+      ),
+      GoRoute(
+        path: AppRoutePaths.citizenIntroSlides,
+        pageBuilder: (context, state) =>
+            _buildTransitionPage(state, const CitizenIntroSlidesScreen()),
       ),
       GoRoute(
         path: AppRoutePaths.operatorLogin,
@@ -263,6 +270,7 @@ class AppRouter {
     final isLoggingIn = (location == AppRoutePaths.citizenLogin ||
         location == AppRoutePaths.citizenRegister ||
         location == AppRoutePaths.citizenAuthIntro ||
+        location == AppRoutePaths.citizenIntroSlides ||
         location == AppRoutePaths.selectUser ||
         location == AppRoutePaths.operatorLogin);
 

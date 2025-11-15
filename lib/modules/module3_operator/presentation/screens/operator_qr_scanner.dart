@@ -3,7 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'package:iwms_citizen_app/modules/module3_operator/services/location_service.dart';
-import 'operator_data_screen.dart';
+
+const Color _operatorPrimary = Color(0xFF1B5E20);
 
 class OperatorQRScanner extends StatefulWidget {
   const OperatorQRScanner({super.key});
@@ -127,7 +128,7 @@ context.push(
     if (!_locationReady) {
       return const Scaffold(
         body: Center(
-          child: CircularProgressIndicator(color: Colors.blueAccent),
+          child: CircularProgressIndicator(color: _operatorPrimary),
         ),
       );
     }
@@ -161,13 +162,20 @@ context.push(
             child: Center(
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black54,
+                  backgroundColor: _operatorPrimary.withOpacity(0.9),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(18),
                   ),
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
                 ),
                 icon: const Icon(Icons.flash_on, color: Colors.white),
-                label: const Text("Toggle Flash"),
+                label: const Text(
+                  "Toggle Flash",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 onPressed: () => _cameraController.toggleTorch(),
               ),
             ),
