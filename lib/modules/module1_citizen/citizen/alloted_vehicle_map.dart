@@ -11,6 +11,9 @@ import '../../../data/models/vehicle_model.dart';
 import '../../../logic/vehicle_tracking/vehicle_bloc.dart';
 import '../../../logic/vehicle_tracking/vehicle_event.dart';
 import '../../../router/app_router.dart';
+import '../../../shared/widgets/home_base_marker.dart';
+import '../../../shared/widgets/tracking_filter_chip_button.dart';
+import '../../../shared/widgets/tracking_view_shell.dart';
 
 class CitizenAllotedVehicleMapScreen extends StatefulWidget {
   const CitizenAllotedVehicleMapScreen({super.key});
@@ -24,7 +27,7 @@ class _CitizenAllotedVehicleMapScreenState
     extends State<CitizenAllotedVehicleMapScreen> {
   final MapController _mapController = MapController();
   final LatLng _gammaCenter = GammaGeofenceConfig.center;
-  _MapThemeOption _selectedTheme = _MapThemeOption.standard;
+  _MapThemeOption _selectedTheme = _MapThemeOption.light;
   LatLng? _lastCameraTarget;
   double? _lastCameraZoom;
   bool _showVehicleDetails = false;
@@ -123,93 +126,136 @@ class _CitizenAllotedVehicleMapScreenState
     return BlocProvider(
       create: (_) => getIt<VehicleBloc>(),
       child: Scaffold(
-        appBar: AppBar(
-          backgroundColor: kPrimaryColor,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go(AppRoutePaths.citizenHome);
+        backgroundColor: const Color(0xFFF4F6F8),
+        body: SafeArea(
+          child: BlocBuilder<VehicleBloc, VehicleState>(
+            builder: (context, state) {
+              final allVehicles = state is VehicleLoaded
+                  ? state.vehicles
+                  : const <VehicleModel>[];
+              final assignedVehicles = _allottedVehicles(allVehicles);
+              final assignedVehicle =
+                  assignedVehicles.isNotEmpty ? assignedVehicles.first : null;
+              final cameraTarget = assignedVehicle != null
+                  ? LatLng(assignedVehicle.latitude, assignedVehicle.longitude)
+                  : _gammaCenter;
+              final targetZoom = assignedVehicle != null ? 15.0 : 13.6;
+              _moveCamera(cameraTarget, targetZoom);
+
+              final showError = state is VehicleError;
+              final hasAssigned = assignedVehicle != null;
+              final assignmentsCount = assignedVehicles.length;
+              if (!hasAssigned && _showVehicleDetails) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
+                  _setVehicleDetailsVisibility(false);
+                });
               }
-            },
-          ),
-          title: const Text(
-            'Track Assigned Vehicle',
-            style: TextStyle(color: Colors.white),
-          ),
-        ),
-        body: BlocBuilder<VehicleBloc, VehicleState>(
-          builder: (context, state) {
-            final allVehicles = state is VehicleLoaded
-                ? state.vehicles
-                : const <VehicleModel>[];
-            final assignedVehicles = _allottedVehicles(allVehicles);
-            final assignedVehicle =
-                assignedVehicles.isNotEmpty ? assignedVehicles.first : null;
-            final cameraTarget = assignedVehicle != null
-                ? LatLng(assignedVehicle.latitude, assignedVehicle.longitude)
-                : _gammaCenter;
-            final targetZoom = assignedVehicle != null ? 15.0 : 13.6;
-            _moveCamera(cameraTarget, targetZoom);
 
-            final showError = state is VehicleError;
-            final hasAssigned = assignedVehicle != null;
-            final assignmentsCount = assignedVehicles.length;
-            if (!hasAssigned && _showVehicleDetails) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (!mounted) return;
-                _setVehicleDetailsVisibility(false);
-              });
-            }
+              final headline = hasAssigned
+                  ? 'Your collector is en route'
+                  : 'Awaiting assigned vehicle';
 
-            return Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Card(
-                elevation: 4,
-                clipBehavior: Clip.antiAlias,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Stack(
-                  children: [
-                    _buildMap(context, assignedVehicle),
-                    _buildFilterChips(
-                      context,
-                      state,
-                      assignmentsCount,
-                      allVehicles.length,
+              final size = MediaQuery.of(context).size;
+              final headerHeight = size.height * 0.2;
+
+              return Column(
+                children: [
+                  SizedBox(
+                    height: headerHeight,
+                    width: double.infinity,
+                    child: TrackingHeroHeader(
+                      contextLabel: 'Assigned vehicle',
+                      headline: headline,
+                      statusPrimary: hasAssigned
+                          ? (assignedVehicle.lastUpdated ?? 'Live telemetry')
+                          : 'No location yet',
+                      statusSecondary:
+                          '$assignmentsCount allocated • ${allVehicles.length} total',
+                      statusContent: _buildHeaderFilterSection(context, state),
+                      onBack: () {
+                        if (context.canPop()) {
+                          context.pop();
+                        } else {
+                          context.go(AppRoutePaths.citizenHome);
+                        }
+                      },
+                      onRefresh: () => context
+                          .read<VehicleBloc>()
+                          .add(const VehicleFetchRequested(showLoading: true)),
                     ),
-                    _buildMapStyleSelector(state, hasAssigned),
-                    _buildZoomControls(state, hasAssigned),
-                    if (state is VehicleLoading)
-                      const Center(child: CircularProgressIndicator()),
-                    if (showError) _buildErrorState(state.message),
-                    if (!hasAssigned && state is VehicleLoaded)
-                      Positioned.fill(
-                        child: Container(
-                          color: Colors.black.withValues(alpha: 0.25),
-                          alignment: Alignment.center,
-                          padding: const EdgeInsets.symmetric(horizontal: 28),
-                          child: Text(
-                            'Waiting for your allocated collector to enter ${GammaGeofenceConfig.name}.',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.9),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(32),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.07),
+                              blurRadius: 24,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(32),
+                          child: Stack(
+                            children: [
+                              _buildMap(context, assignedVehicle),
+                              _buildMapStyleSelector(state, hasAssigned),
+                              _buildZoomControls(state, hasAssigned),
+                              if (hasAssigned)
+                                Align(
+                                  alignment: Alignment.center,
+                                  child: GestureDetector(
+                                    onTap: () =>
+                                        _setVehicleDetailsVisibility(true),
+                                    child: TrackingSpeechBubble(
+                                      message:
+                                          assignedVehicle.registrationNumber ??
+                                              'View details',
+                                      icon: Icons.local_shipping_rounded,
+                                    ),
+                                  ),
                                 ),
+                              if (state is VehicleLoading)
+                                const Center(
+                                    child: CircularProgressIndicator()),
+                              if (showError) _buildErrorState(state.message),
+                              if (!hasAssigned && state is VehicleLoaded)
+                                Positioned.fill(
+                                  child: Container(
+                                    color: Colors.black.withValues(alpha: 0.25),
+                                    alignment: Alignment.center,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 28),
+                                    child: Text(
+                                      'Waiting for your allocated collector to enter ${GammaGeofenceConfig.name}.',
+                                      textAlign: TextAlign.center,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: Colors.white
+                                                .withValues(alpha: 0.9),
+                                          ),
+                                    ),
+                                  ),
+                                ),
+                              _buildVehicleInfoPanel(context, assignedVehicle),
+                            ],
                           ),
                         ),
                       ),
-                    _buildVehicleInfoPanel(context, assignedVehicle),
-                  ],
-                ),
-              ),
-            );
-          },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -218,9 +264,18 @@ class _CitizenAllotedVehicleMapScreenState
   Widget _buildMap(BuildContext context, VehicleModel? vehicle) {
     final theme = Theme.of(context);
     final themeConfig = _mapThemes[_selectedTheme]!;
-    final markers = <Marker>[];
+
+    final arcMarkers = <Marker>[];
     if (vehicle != null) {
-      markers.add(
+      final vehiclePoint = LatLng(vehicle.latitude, vehicle.longitude);
+      if (GammaGeofenceConfig.contains(vehiclePoint)) {
+        arcMarkers.addAll(_buildArcMarkers(_gammaCenter, vehiclePoint));
+      }
+    }
+
+    final markers = <Marker>[
+      ...arcMarkers,
+      if (vehicle != null)
         Marker(
           width: 120,
           height: 136,
@@ -237,16 +292,13 @@ class _CitizenAllotedVehicleMapScreenState
             ),
           ),
         ),
-      );
-    }
-    markers.add(
       Marker(
-        width: 140,
-        height: 140,
+        width: 68,
+        height: 68,
         point: _gammaCenter,
         child: _buildGammaFacilityMarker(),
       ),
-    );
+    ];
 
     return FlutterMap(
       mapController: _mapController,
@@ -288,13 +340,10 @@ class _CitizenAllotedVehicleMapScreenState
     );
   }
 
-  Widget _buildFilterChips(
+  Widget _buildHeaderFilterSection(
     BuildContext context,
     VehicleState state,
-    int vehiclesInGeofence,
-    int totalVehicles,
   ) {
-    final theme = Theme.of(context);
     final bloc = context.read<VehicleBloc>();
     VehicleFilter activeFilter = VehicleFilter.all;
 
@@ -302,104 +351,24 @@ class _CitizenAllotedVehicleMapScreenState
       activeFilter = state.activeFilter;
     }
 
-    return Positioned(
-      top: 16,
-      left: 16,
-      right: 16,
-      child: Container(
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface.withValues(alpha: 0.95),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 18,
-              offset: const Offset(0, 10),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: VehicleFilter.values.map((filter) {
+          final isSelected = activeFilter == filter;
+          final count = bloc.countVehiclesByFilter(filter);
+          final label =
+              '${filter.name[0].toUpperCase()}${filter.name.substring(1)} ($count)';
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TrackingFilterChipButton(
+              label: label,
+              selected: isSelected,
+              onTap: () => bloc.add(VehicleFilterUpdated(filter)),
             ),
-          ],
-        ),
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${GammaGeofenceConfig.name} facility',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Blue Planet Integrated Waste Management Facility',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                FilledButton.tonalIcon(
-                  onPressed: _recenterOnGamma,
-                  icon: const Icon(Icons.center_focus_strong_outlined),
-                  label: const Text('Focus'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: [
-                _StatPill(
-                  icon: Icons.location_on_outlined,
-                  label: '$vehiclesInGeofence in geofence',
-                ),
-                _StatPill(
-                  icon: Icons.local_shipping_outlined,
-                  label: '$totalVehicles tracked',
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: VehicleFilter.values.map((filter) {
-                  final isSelected = activeFilter == filter;
-                  final count = bloc.countVehiclesByFilter(filter);
-                  final label =
-                      '${filter.name[0].toUpperCase()}${filter.name.substring(1)} ($count)';
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(label),
-                      selected: isSelected,
-                      onSelected: (selected) {
-                        if (selected) {
-                          bloc.add(VehicleFilterUpdated(filter));
-                        }
-                      },
-                      selectedColor: theme.colorScheme.primary,
-                      labelStyle: theme.textTheme.bodyMedium?.copyWith(
-                        color: isSelected
-                            ? Colors.white
-                            : theme.colorScheme.onSurface,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
-        ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -626,52 +595,59 @@ class _CitizenAllotedVehicleMapScreenState
   }
 
   Widget _buildGammaFacilityMarker() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
+    return const HomeBaseMarker(size: 40);
+  }
+
+  Iterable<Marker> _buildArcMarkers(LatLng start, LatLng end) sync* {
+    final arcPoints = _generateArcPoints(start, end);
+    for (var i = 1; i < arcPoints.length - 1; i += 2) {
+      final point = arcPoints[i];
+      yield Marker(
+        width: 10,
+        height: 10,
+        point: point,
+        child: Container(
           decoration: BoxDecoration(
-            color: kPrimaryColor,
             shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.25),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.all(10),
-          child: const Icon(
-            Icons.home_work_outlined,
-            color: Colors.white,
-            size: 26,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.12),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: const Text(
-            GammaGeofenceConfig.name,
-            style: TextStyle(
-              color: kTextColor,
-              fontWeight: FontWeight.w700,
+            color: Colors.white.withValues(alpha: 0.85),
+            border: Border.all(
+              color: const Color(0xFF0B5721).withValues(alpha: 0.7),
+              width: 1,
             ),
           ),
         ),
-      ],
+      );
+    }
+  }
+
+  List<LatLng> _generateArcPoints(
+    LatLng start,
+    LatLng end, {
+    int segments = 20,
+    double curveStrength = 0.003,
+  }) {
+    final midLat = (start.latitude + end.latitude) / 2;
+    final midLng = (start.longitude + end.longitude) / 2;
+    final dx = end.longitude - start.longitude;
+    final dy = end.latitude - start.latitude;
+    final control = LatLng(
+      midLat - dy * curveStrength,
+      midLng + dx * curveStrength,
     );
+
+    final points = <LatLng>[];
+    for (var i = 0; i <= segments; i++) {
+      final t = i / segments;
+      final invT = 1 - t;
+      final lat = invT * invT * start.latitude +
+          2 * invT * t * control.latitude +
+          t * t * end.latitude;
+      final lng = invT * invT * start.longitude +
+          2 * invT * t * control.longitude +
+          t * t * end.longitude;
+      points.add(LatLng(lat, lng));
+    }
+    return points;
   }
 }
 
@@ -769,41 +745,6 @@ class _MapControlButton extends StatelessWidget {
             color: theme.colorScheme.primary,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _StatPill extends StatelessWidget {
-  const _StatPill({
-    required this.icon,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: theme.colorScheme.primary),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
       ),
     );
   }

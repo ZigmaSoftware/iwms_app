@@ -51,6 +51,7 @@ class AuthStateFailure extends AuthState {
   List<Object?> get props => [role, userName, message];
 }
 class AuthStateAuthenticatedOperator extends AuthState {
+  @override
   final String userName;
 
   const AuthStateAuthenticatedOperator({required this.userName});

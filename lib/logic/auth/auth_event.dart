@@ -43,7 +43,7 @@ class AuthOperatorLoginRequested extends AuthEvent {
   final String userName;
   final String operatorId;
 
-  AuthOperatorLoginRequested({
+  const AuthOperatorLoginRequested({
     required this.userName,
     required this.operatorId,
   });

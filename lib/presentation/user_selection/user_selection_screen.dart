@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
 
+
 import '../../modules/module1_citizen/citizen/auth_background.dart';
 
 class UserSelectionScreen extends StatelessWidget {
@@ -80,6 +81,14 @@ class UserSelectionScreen extends StatelessWidget {
                       iconColor: primaryColor,
                     ),
                     _UserRoleCard(
+                      icon: Icons.local_shipping_rounded,
+                      title: "Driver",
+                      onTap: () {
+                        context.push(AppRoutePaths.driverLogin);
+                      },
+                      iconColor: primaryColor,
+                    ),
+                    _UserRoleCard(
                       icon: Icons.build,
                       title: "Operator",
                       onTap: () {
@@ -90,14 +99,6 @@ class UserSelectionScreen extends StatelessWidget {
                     _UserRoleCard(
                       icon: Icons.admin_panel_settings,
                       title: "Admin",
-                      onTap: () {
-                        _showComingSoon(context);
-                      },
-                      iconColor: primaryColor,
-                    ),
-                    _UserRoleCard(
-                      icon: Icons.security,
-                      title: "Super Admin",
                       onTap: () {
                         _showComingSoon(context);
                       },

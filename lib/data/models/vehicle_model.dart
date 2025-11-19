@@ -15,6 +15,11 @@ class VehicleModel extends Equatable {
   final bool isInsideGeofence;
   final String? address;
 
+  // Real-time telemetry
+  final double? speedKmh;
+  final double? fuelLevel;
+  final double? distanceKm;
+
   const VehicleModel({
     required this.id,
     required this.latitude,
@@ -26,6 +31,9 @@ class VehicleModel extends Equatable {
     this.lastUpdated,
     this.isInsideGeofence = false,
     this.address,
+    this.speedKmh,
+    this.fuelLevel,
+    this.distanceKm,
   });
 
   // Factory constructor to safely parse JSON from the API
@@ -124,6 +132,24 @@ class VehicleModel extends Equatable {
     }
     // 🟢 END OF THE REAL FIX
 
+    // --- Real-time telemetry ---
+    double? parseTelemetry(List<String> keys) {
+      for (final key in keys) {
+        if (json.containsKey(key) && json[key] != null) {
+          return safeParseDouble(json[key]);
+        }
+      }
+      return null;
+    }
+
+    final speedTelemetry = parseTelemetry(['speed', 'SPEED']);
+    final fuelTelemetry = parseTelemetry(
+      ['fuelLevel', 'fuel', 'fuelPct', 'fuelPercent', 'fuel_perc'],
+    );
+    final distanceTelemetry = parseTelemetry(
+      ['odo', 'ODO', 'odometer', 'distance', 'totalDistance', 'totalDistanceKm'],
+    );
+
     return VehicleModel(
       id: vehicleId,
       latitude: lat,
@@ -139,6 +165,9 @@ class VehicleModel extends Equatable {
       lastUpdated: updateTime,
       isInsideGeofence: insideGeofence,
       address: address,
+      speedKmh: speedTelemetry,
+      fuelLevel: fuelTelemetry,
+      distanceKm: distanceTelemetry,
     );
   }
 
@@ -154,5 +183,8 @@ class VehicleModel extends Equatable {
         lastUpdated,
         isInsideGeofence,
         address,
+        speedKmh,
+        fuelLevel,
+        distanceKm,
       ];
 }

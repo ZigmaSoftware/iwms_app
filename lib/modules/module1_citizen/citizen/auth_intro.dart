@@ -97,18 +97,6 @@ class CitizenAuthIntroScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: () => context.go(AppRoutePaths.citizenRegister),
-                    child: const Text(
-                      'Create an account',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),

@@ -12,6 +12,9 @@ import '../../../core/geofence_config.dart';
 import '../../../router/app_router.dart';
 import '../../../data/models/site_polygon.dart';
 import '../../../data/repositories/site_repository.dart';
+import '../../../shared/widgets/home_base_marker.dart';
+import '../../../shared/widgets/tracking_filter_chip_button.dart';
+import '../../../shared/widgets/tracking_view_shell.dart';
 
 class MapScreen extends StatefulWidget {
   final String? driverName;
@@ -31,7 +34,7 @@ class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   final LatLng _gammaCenter = GammaGeofenceConfig.center;
 
-  _MapThemeOption _selectedTheme = _MapThemeOption.standard;
+  _MapThemeOption _selectedTheme = _MapThemeOption.light;
   static const Map<_MapThemeOption, _MapThemeConfig> _mapThemes = {
     _MapThemeOption.standard: _MapThemeConfig(
       label: 'Standard',
@@ -62,173 +65,60 @@ class _MapScreenState extends State<MapScreen> {
     if (mounted) setState(() => _sites = result);
   }
 
-  // --- Vehicle list (filtered) modal ---
-  void _showVehicleDetailsModal(BuildContext context) {
-    final bloc = context.read<VehicleBloc>();
-    final state = bloc.state;
-
-    List<VehicleModel> list = const [];
-    VehicleFilter filter = VehicleFilter.all;
-
-    if (state is VehicleLoaded) {
-      filter = state.activeFilter;
-      list = state.vehicles.where((v) {
-        final s = (v.status ?? '').toLowerCase();
-        switch (filter) {
-          case VehicleFilter.all:
-            return true;
-          case VehicleFilter.running:
-            return s == 'running';
-          case VehicleFilter.idle:
-            return s == 'idle';
-          case VehicleFilter.parked:
-            return s == 'parked';
-          case VehicleFilter.noData:
-            return s == 'no data';
-        }
-      }).toList(growable: false);
-    }
-
-    showModalBottomSheet(
-      context: context,
-      useRootNavigator: false,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (sheetCtx) {
-        final theme = Theme.of(sheetCtx);
-        if (state is! VehicleLoaded) {
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text('No vehicle data loaded.',
-                  style: theme.textTheme.bodyLarge),
-            ),
-          );
-        }
-        if (list.isEmpty) {
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(
-                'No vehicles found for filter: ${filter.name.toUpperCase()}',
-                style: theme.textTheme.bodyLarge,
-              ),
-            ),
-          );
-        }
-
-        return SafeArea(
-          child: BlocProvider.value(
-            value: bloc,
-            child: FractionallySizedBox(
-              heightFactor: 0.7,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '${filter.name.toUpperCase()} Vehicles',
-                            style: theme.textTheme.titleLarge,
-                          ),
-                        ),
-                        Text(
-                          '${list.length}',
-                          style: theme.textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: ListView.separated(
-                      itemCount: list.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (_, index) {
-                        final vehicle = list[index];
-                        final color = bloc.getStatusColor(vehicle.status);
-                        return ListTile(
-                          dense: true,
-                          leading: Icon(Icons.local_shipping, color: color),
-                          title: Text(vehicle.registrationNumber ?? 'Unknown'),
-                          subtitle: Text(
-                            'Last update: ${vehicle.lastUpdated ?? 'N/A'}',
-                          ),
-                          trailing: Text(
-                            (vehicle.status ?? 'NO DATA').toUpperCase(),
-                            style: TextStyle(
-                              color: color,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          onTap: () {
-                            bloc.add(VehicleSelectionUpdated(vehicle.id));
-                            Navigator.of(sheetCtx).maybePop();
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
+  Widget _buildGammaFacilityMarker() {
+    return const HomeBaseMarker(size: 40);
   }
 
-  Widget _buildGammaFacilityMarker() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
+  Iterable<Marker> _buildArcMarkers(LatLng start, LatLng end) sync* {
+    final arcPoints = _generateArcPoints(start, end);
+    for (var i = 1; i < arcPoints.length - 1; i += 2) {
+      final point = arcPoints[i];
+      yield Marker(
+        width: 10,
+        height: 10,
+        point: point,
+        child: Container(
           decoration: BoxDecoration(
-            color: kPrimaryColor,
             shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.25),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.all(10),
-          child: const Icon(
-            Icons.home_work_outlined,
-            color: Colors.white,
-            size: 26,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.12),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: const Text(
-            GammaGeofenceConfig.name,
-            style: TextStyle(
-              color: kTextColor,
-              fontWeight: FontWeight.w700,
+            color: Colors.white.withValues(alpha: 0.85),
+            border: Border.all(
+              color: const Color(0xFF0B5721).withValues(alpha: 0.7),
+              width: 1,
             ),
           ),
         ),
-      ],
+      );
+    }
+  }
+
+  List<LatLng> _generateArcPoints(
+    LatLng start,
+    LatLng end, {
+    int segments = 20,
+    double curveStrength = 0.003,
+  }) {
+    final midLat = (start.latitude + end.latitude) / 2;
+    final midLng = (start.longitude + end.longitude) / 2;
+    final dx = end.longitude - start.longitude;
+    final dy = end.latitude - start.latitude;
+    final control = LatLng(
+      midLat - dy * curveStrength,
+      midLng + dx * curveStrength,
     );
+
+    final points = <LatLng>[];
+    for (var i = 0; i <= segments; i++) {
+      final t = i / segments;
+      final invT = 1 - t;
+      final lat = invT * invT * start.latitude +
+          2 * invT * t * control.latitude +
+          t * t * end.latitude;
+      final lng = invT * invT * start.longitude +
+          2 * invT * t * control.longitude +
+          t * t * end.longitude;
+      points.add(LatLng(lat, lng));
+    }
+    return points;
   }
 
   void _zoomIn() {
@@ -254,23 +144,6 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _selectedTheme = theme;
     });
-  }
-
-  int _countVehiclesInGamma(List<VehicleModel> vehicles) {
-    return vehicles.where(_isVehicleInsideGamma).length;
-  }
-
-  bool _isVehicleInsideGamma(VehicleModel vehicle) {
-    final position = LatLng(vehicle.latitude, vehicle.longitude);
-    if (GammaGeofenceConfig.contains(position)) {
-      return true;
-    }
-
-    final address = vehicle.address?.toLowerCase() ?? '';
-    final bool providerFlagged = vehicle.isInsideGeofence &&
-        address.contains(GammaGeofenceConfig.addressHint);
-
-    return providerFlagged && GammaGeofenceConfig.isNear(position);
   }
 
   void _focusOnVehicle(VehicleModel vehicle) {
@@ -303,76 +176,109 @@ class _MapScreenState extends State<MapScreen> {
     return BlocProvider(
       create: (context) => getIt<VehicleBloc>(),
       child: Scaffold(
-        appBar: AppBar(
-          // --- FIX: Added Back Button ---
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go(AppRoutePaths.citizenHome);
-              }
-            },
-          ),
-          title: const Text('Live Vehicle Tracking',
-              style: TextStyle(color: Colors.white)),
-          backgroundColor: kPrimaryColor,
-          iconTheme: const IconThemeData(color: Colors.white),
-          actions: [
-            // --- FIX: Added Details Icon Button ---
-            BlocBuilder<VehicleBloc, VehicleState>(
-              builder: (context, state) {
-                return IconButton(
-                  tooltip: 'Show Vehicle List',
-                  icon:
-                      const Icon(Icons.list_alt_outlined, color: Colors.white),
-                  onPressed: () {
-                    _showVehicleDetailsModal(context);
-                  },
-                );
-              },
-            )
-          ],
-        ),
-        body: BlocBuilder<VehicleBloc, VehicleState>(
-          builder: (context, state) {
-            // --- FIX: Wrap body in Padding and Card ---
-            return Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Card(
-                elevation: 4,
-                clipBehavior: Clip.antiAlias,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                // --- END FIX ---
-                child: Stack(
-                  children: [
-                    _buildMap(context, state),
-                    _buildFilterChips(context, state),
-                    _buildMapStyleSelector(state),
-                    _buildZoomControls(state),
-                    if (state is VehicleLoading)
-                      const Center(child: CircularProgressIndicator()),
-                    if (state is VehicleError)
-                      Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Text(
-                            state.message,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                                color: Colors.red, fontSize: 16),
+        backgroundColor: const Color(0xFFF4F6F8),
+        body: SafeArea(
+          child: BlocBuilder<VehicleBloc, VehicleState>(
+            builder: (context, state) {
+              final size = MediaQuery.of(context).size;
+              final double headerHeight = size.height * 0.2;
+              final totalVehicles =
+                  state is VehicleLoaded ? state.vehicles.length : 0;
+              final selectedVehicle =
+                  state is VehicleLoaded ? state.selectedVehicle : null;
+              final String headline = selectedVehicle != null
+                  ? 'Tracking ${selectedVehicle.registrationNumber ?? 'vehicle'}'
+                  : 'Live vehicle tracking';
+              final statusPrimary =
+                  selectedVehicle?.lastUpdated ?? 'Refreshing telemetry';
+              final statusSecondary = totalVehicles > 0
+                  ? '$totalVehicles active'
+                  : 'Awaiting signal';
+
+              return Column(
+                children: [
+                  SizedBox(
+                    height: headerHeight,
+                    width: double.infinity,
+                    child: TrackingHeroHeader(
+                      contextLabel:
+                          widget.vehicleNumber ?? 'Gamma Collection Zone',
+                      headline: headline,
+                      statusPrimary: statusPrimary,
+                      statusSecondary: statusSecondary,
+                      statusContent: _buildHeaderFilterSection(context, state),
+                      onBack: () {
+                        if (context.canPop()) {
+                          context.pop();
+                        } else {
+                          context.go(AppRoutePaths.citizenHome);
+                        }
+                      },
+                      onRefresh: () => context
+                          .read<VehicleBloc>()
+                          .add(const VehicleFetchRequested(showLoading: true)),
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(32),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.07),
+                              blurRadius: 24,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(32),
+                          child: Stack(
+                            children: [
+                              _buildMap(context, state),
+                              _buildMapStyleSelector(state),
+                              _buildZoomControls(state),
+                              if (selectedVehicle != null)
+                                Align(
+                                  alignment: Alignment.center,
+                                  child: TrackingSpeechBubble(
+                                    message:
+                                        '${selectedVehicle.registrationNumber ?? 'Vehicle'} en route',
+                                    icon: Icons.local_shipping_rounded,
+                                  ),
+                                ),
+                              if (state is VehicleLoading)
+                                const Center(
+                                    child: CircularProgressIndicator()),
+                              if (state is VehicleError)
+                                Align(
+                                  alignment: Alignment.topCenter,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: Text(
+                                      state.message,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        color: Colors.red,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              _buildVehicleInfoPanel(context, state),
+                            ],
                           ),
                         ),
                       ),
-                    _buildVehicleInfoPanel(context, state),
-                  ],
-                ),
-              ),
-            );
-          },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -405,7 +311,17 @@ class _MapScreenState extends State<MapScreen> {
       }).toList();
     }
 
+    final arcMarkers = <Marker>[];
+    if (selectedVehicle != null) {
+      final vehiclePoint =
+          LatLng(selectedVehicle.latitude, selectedVehicle.longitude);
+      if (GammaGeofenceConfig.contains(vehiclePoint)) {
+        arcMarkers.addAll(_buildArcMarkers(_gammaCenter, vehiclePoint));
+      }
+    }
+
     final markers = <Marker>[
+      ...arcMarkers,
       for (final vehicle in vehiclesToShow)
         Marker(
           width: 110,
@@ -425,8 +341,8 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ),
       Marker(
-        width: 140,
-        height: 140,
+        width: 68,
+        height: 68,
         point: _gammaCenter,
         child: _buildGammaFacilityMarker(),
       ),
@@ -489,127 +405,39 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  // --- FILTER CHIPS ---
-  Widget _buildFilterChips(BuildContext context, VehicleState state) {
-    final theme = Theme.of(context);
+  // --- HEADER FILTER SECTION ---
+  Widget _buildHeaderFilterSection(BuildContext context, VehicleState state) {
     final bloc = context.read<VehicleBloc>();
-
-    List<VehicleModel> vehicles = const [];
     VehicleFilter activeFilter = VehicleFilter.all;
 
     if (state is VehicleLoaded) {
-      vehicles = state.vehicles;
       activeFilter = state.activeFilter;
     }
 
-    final vehiclesInGamma = _countVehiclesInGamma(vehicles);
-
-    return Positioned(
-      top: 16,
-      left: 16,
-      right: 16,
-      child: Container(
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface.withValues(alpha: 0.95),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 18,
-              offset: const Offset(0, 10),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: VehicleFilter.values.map((filter) {
+          final isSelected = activeFilter == filter;
+          final count = bloc.countVehiclesByFilter(filter);
+          final label =
+              '${filter.name[0].toUpperCase()}${filter.name.substring(1)} ($count)';
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TrackingFilterChipButton(
+              label: label,
+              selected: isSelected,
+              onTap: () => bloc.add(VehicleFilterUpdated(filter)),
             ),
-          ],
-        ),
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${GammaGeofenceConfig.name} facility',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Blue Planet Integrated Waste Management Facility',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                FilledButton.tonalIcon(
-                  onPressed: _recenterOnGamma,
-                  icon: const Icon(Icons.center_focus_strong_outlined),
-                  label: const Text('Focus'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: [
-                _StatPill(
-                  icon: Icons.location_on_outlined,
-                  label: '$vehiclesInGamma in geofence',
-                ),
-                _StatPill(
-                  icon: Icons.local_shipping_outlined,
-                  label: '${vehicles.length} tracked',
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: VehicleFilter.values.map((filter) {
-                  final isSelected = activeFilter == filter;
-                  final count = bloc.countVehiclesByFilter(filter);
-                  final label =
-                      '${filter.name[0].toUpperCase()}${filter.name.substring(1)} ($count)';
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(label),
-                      selected: isSelected,
-                      onSelected: (selected) {
-                        if (selected) {
-                          bloc.add(VehicleFilterUpdated(filter));
-                        }
-                      },
-                      selectedColor: theme.colorScheme.primary,
-                      labelStyle: theme.textTheme.bodyMedium?.copyWith(
-                        color: isSelected
-                            ? Colors.white
-                            : theme.colorScheme.onSurface,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
-        ),
+          );
+        }).toList(),
       ),
     );
   }
 
   Widget _buildMapStyleSelector(VehicleState state) {
     final theme = Theme.of(context);
-    final hasSelection =
-        state is VehicleLoaded && state.selectedVehicle != null;
     final double safeBottom = MediaQuery.of(context).padding.bottom;
     final double bottomOffset = 16.0 + safeBottom;
 
@@ -914,41 +742,6 @@ class _MapControlButton extends StatelessWidget {
             color: theme.colorScheme.primary,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _StatPill extends StatelessWidget {
-  const _StatPill({
-    required this.icon,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: theme.colorScheme.primary),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter, PointerDeviceKind;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -11,7 +10,6 @@ import 'package:auto_size_text/auto_size_text.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:motion_tab_bar/MotionTabBar.dart';
-import 'package:graphic/graphic.dart' as graphic;
 import 'package:awesome_dialog/awesome_dialog.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -179,6 +177,172 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
+enum _WasteMetric { total, wet, dry, mixed }
+
+class _WasteImageStatCard extends StatelessWidget {
+  const _WasteImageStatCard({
+    required this.assetPath,
+    required this.label,
+    required this.weight,
+    required this.accentColor,
+    required this.formatter,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String assetPath;
+  final String label;
+  final double weight;
+  final Color accentColor;
+  final NumberFormat formatter;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final surface = theme.colorScheme.surface;
+    final borderRadius = BorderRadius.circular(26);
+    return SizedBox(
+      height: 180,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.fastEaseInToSlowEaseOut,
+        decoration: BoxDecoration(
+          borderRadius: borderRadius,
+          border: Border.all(
+            color: isSelected
+                ? accentColor
+                : accentColor.withValues(alpha: 0.25),
+            width: isSelected ? 2 : 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: accentColor.withValues(alpha: isSelected ? 0.3 : 0.18),
+              blurRadius: isSelected ? 26 : 20,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: borderRadius,
+          child: InkWell(
+            borderRadius: borderRadius,
+            onTap: onTap,
+            child: ClipRRect(
+              borderRadius: borderRadius,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        image: DecorationImage(
+                          image: AssetImage(assetPath),
+                          fit: BoxFit.cover,
+                          colorFilter: isSelected
+                              ? ColorFilter.mode(
+                                  Colors.black.withValues(alpha: 0.12),
+                                  BlendMode.darken,
+                                )
+                              : null,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: surface,
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(26),
+                        bottomRight: Radius.circular(26),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          label,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: accentColor.withValues(alpha: 0.8),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 240),
+                          child: Text(
+                            '${formatter.format(weight)} kg',
+                            key: ValueKey<String>(
+                              '${label}_${weight.toStringAsFixed(2)}',
+                            ),
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: accentColor,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class WasteSummary {
+  WasteSummary({
+    required this.date,
+    required this.totalTrip,
+    required this.dryWeight,
+    required this.wetWeight,
+    required this.mixWeight,
+    required this.totalNetWeight,
+    required this.averageWeightPerTrip,
+  });
+
+  final DateTime date;
+  final int totalTrip;
+  final double dryWeight;
+  final double wetWeight;
+  final double mixWeight;
+  final double totalNetWeight;
+  final double averageWeightPerTrip;
+
+  factory WasteSummary.fromJson(Map<String, dynamic> json) {
+    final isoDate = json['date'] as String?;
+    final parsedDate = isoDate != null
+        ? DateTime.tryParse(isoDate)
+        : null;
+    final date = parsedDate != null
+        ? DateTime(parsedDate.year, parsedDate.month, parsedDate.day)
+        : DateTime.now();
+
+    return WasteSummary(
+      date: date,
+      totalTrip: (json['total_trip'] as num?)?.toInt() ?? 0,
+      dryWeight: (json['dry_weight'] as num?)?.toDouble() ?? 0.0,
+      wetWeight: (json['wet_weight'] as num?)?.toDouble() ?? 0.0,
+      mixWeight: (json['mix_weight'] as num?)?.toDouble() ?? 0.0,
+      totalNetWeight: (json['total_net_weight'] as num?)?.toDouble() ?? 0.0,
+      averageWeightPerTrip:
+          (json['average_weight_per_trip'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
 // --- 2. CITIZEN DASHBOARD (The actual app home with drawer) ---
 
 class CitizenDashboard extends StatefulWidget {
@@ -199,17 +363,33 @@ const String _bannerFeedUrl =
 const String _bannerCacheKey = 'citizen_banner_feed_v1';
 
 class _CitizenDashboardState extends State<CitizenDashboard>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
+  static final DateFormat _trackMonthKeyFormatter = DateFormat('yyyy-MM');
+  static final DateFormat _trackDateKeyFormatter = DateFormat('yyyy-MM-dd');
+  static final DateFormat _trackDisplayFormat =
+      DateFormat('EEEE, dd MMM yyyy');
+  static final DateFormat _trackShortDisplayFormat = DateFormat('d MMM');
+  static final NumberFormat _trackWeightFormatter =
+      NumberFormat.decimalPattern();
+  static final NumberFormat _trackAverageFormatter =
+      NumberFormat('#,##0.00');
+  static const String _trackApiBaseUrl =
+      'https://zigma.in/d2d/folders/waste_collected_summary_report/waste_collected_data_api.php';
+  static const String _trackApiKey = 'ZIGMA-DELHI-WEIGHMENT-2025-SECURE';
+
   WastePeriod _selectedPeriod = WastePeriod.daily;
   _BottomNavItem _activeNavItem = _BottomNavItem.home;
   late final PageController _bannerPageController;
-  late final PageController _wasteCardController;
   late final AnimationController _bellController;
   late final Animation<double> _bellSwing;
   int _activeBannerIndex = 0;
   Timer? _bannerAutoSlideTimer;
-  double _wasteCarouselPage = 0;
-  WasteTrendRange _selectedTrendRange = WasteTrendRange.monthly;
+
+  DateTime _selectedTrackDate = DateTime.now();
+  String? _trackMonthKey;
+  Map<String, WasteSummary> _trackSummaries = {};
+  bool _isTrackDataLoading = false;
+  String? _trackDataError;
 
   final Map<WastePeriod, _WasteStats> _wasteStats = const {
     WastePeriod.daily:
@@ -219,6 +399,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     WastePeriod.yearly:
         _WasteStats(dry: '690 kg', wet: '510 kg', mixed: '138 kg'),
   };
+  _WasteMetric _activeWasteMetric = _WasteMetric.total;
 
   late final NotificationService _notificationService;
   final List<_CitizenAlert> _alerts = [];
@@ -269,8 +450,6 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     _notificationService = getIt<NotificationService>();
     _bannerPageController = PageController(viewportFraction: 0.92)
       ..addListener(_handleBannerScroll);
-    _wasteCardController = PageController(viewportFraction: 0.92)
-      ..addListener(_handleWasteCarouselScroll);
     _bellController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -281,6 +460,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     ]).animate(
       CurvedAnimation(parent: _bellController, curve: Curves.easeInOut),
     );
+    _loadTrackDataForMonth(_selectedTrackDate, forceRefresh: true);
     _initializeBannerFeed();
     _restartBannerAutoSlideTimer();
   }
@@ -290,9 +470,6 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     _stopBannerAutoSlide();
     _bannerPageController
       ..removeListener(_handleBannerScroll)
-      ..dispose();
-    _wasteCardController
-      ..removeListener(_handleWasteCarouselScroll)
       ..dispose();
     _bellController.dispose();
     super.dispose();
@@ -419,20 +596,46 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     }
   }
 
-  void _handleWasteCarouselScroll() {
-    if (!mounted || !_wasteCardController.hasClients) return;
-    final double page =
-        _wasteCardController.page ?? _wasteCarouselPage;
-    setState(() {
-      _wasteCarouselPage = page;
-    });
-  }
-
   void _onBottomNavTap(_BottomNavItem item) {
     if (!mounted) return;
     setState(() {
       _activeNavItem = item;
     });
+  }
+
+  String _navLabel(_BottomNavItem item) {
+    switch (item) {
+      case _BottomNavItem.track:
+        return 'Track';
+      case _BottomNavItem.map:
+        return 'Map';
+      case _BottomNavItem.profile:
+        return 'Profile';
+      case _BottomNavItem.home:
+      default:
+        return 'Home';
+    }
+  }
+
+  _BottomNavItem _navItemFromLabel(String label) {
+    switch (label) {
+      case 'Track':
+        return _BottomNavItem.track;
+      case 'Map':
+        return _BottomNavItem.map;
+      case 'Profile':
+        return _BottomNavItem.profile;
+      case 'Home':
+      default:
+        return _BottomNavItem.home;
+    }
+  }
+
+  _BottomNavItem _navItemFromIndex(int index) {
+    if (index < 0 || index >= _orderedNavItems.length) {
+      return _orderedNavItems.first;
+    }
+    return _orderedNavItems[index];
   }
 
   double _parseWeightValue(String value) {
@@ -451,6 +654,15 @@ class _CitizenDashboardState extends State<CitizenDashboard>
             ? 1
             : 30;
     return divisor > 0 ? totalWeight / divisor : 0;
+  }
+
+  _WasteStats _statsFromSummary(WasteSummary summary) {
+    String format(double value) => '${_trackWeightFormatter.format(value)} kg';
+    return _WasteStats(
+      dry: format(summary.dryWeight),
+      wet: format(summary.wetWeight),
+      mixed: format(summary.mixWeight),
+    );
   }
 
   void _initializeBannerFeed() {
@@ -616,12 +828,51 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     required Color textColor,
     required Color secondaryTextColor,
     required _WasteStats stats,
+    WasteSummary? summary,
   }) {
     final theme = Theme.of(context);
     final double average = _calculateAverageValue(stats);
-    const List<_WasteBarData> progressItems = _collectionProgressItems;
+    final WasteSummary? liveSummary = summary;
+    final bool hasLiveSummary = liveSummary != null;
+    final double dryValue = _parseWeightValue(stats.dry);
+    final double wetValue = _parseWeightValue(stats.wet);
+    final double mixedValue = _parseWeightValue(stats.mixed);
+    final double computedTotal = dryValue + wetValue + mixedValue;
+    final double? liveTotal = liveSummary?.totalNetWeight;
+    final double primaryValue = liveTotal ?? average;
+    final String primaryLabel = hasLiveSummary
+        ? 'Total waste collected'
+        : 'Average waste saving this month';
+    final List<_WasteBarData> progressItems;
+    if (liveSummary != null) {
+      progressItems = [
+        _WasteBarData(
+          label: 'Wet',
+          value: wetValue,
+          valueLabel:
+              'Wet ${_trackWeightFormatter.format(liveSummary.wetWeight)} kg',
+          color: const Color(0xFF1976D2),
+        ),
+        _WasteBarData(
+          label: 'Dry',
+          value: dryValue,
+          valueLabel:
+              'Dry ${_trackWeightFormatter.format(liveSummary.dryWeight)} kg',
+          color: const Color(0xFF2E7D32),
+        ),
+        _WasteBarData(
+          label: 'Mixed',
+          value: mixedValue,
+          valueLabel: 'Mixed ${_trackWeightFormatter.format(liveSummary.mixWeight)} kg',
+          color: const Color(0xFFF57F17),
+        ),
+      ];
+    } else {
+      progressItems = _collectionProgressItems;
+    }
+    final double chartTotal = hasLiveSummary ? computedTotal : 100;
 
-    Widget _buildSwatch(_WasteBarData item) {
+    Widget buildSwatch(_WasteBarData item) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -659,7 +910,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                '${average.toStringAsFixed(2)} Kg',
+                '${_trackWeightFormatter.format(primaryValue)} Kg',
                 style: theme.textTheme.headlineLarge?.copyWith(
                   color: textColor,
                   fontWeight: FontWeight.w900,
@@ -668,7 +919,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
               ),
               const SizedBox(height: 4),
               Text(
-                'Average waste saving this month',
+                primaryLabel,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: secondaryTextColor,
                   fontWeight: FontWeight.w700,
@@ -689,7 +940,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
                   runSpacing: 6,
                   alignment: WrapAlignment.start,
                   children:
-                      progressItems.map((item) => _buildSwatch(item)).toList(),
+                      progressItems.map((item) => buildSwatch(item)).toList(),
                 ),
               ),
             ],
@@ -701,7 +952,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
           height: radialSize,
           child: _WasteRadialBreakdown(
             items: progressItems,
-            totalValue: 100,
+            totalValue: chartTotal,
             textColor: textColor,
             backgroundColor: Colors.white,
           ),
@@ -722,6 +973,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     List<Color> headerGradientColors,
     List<Color> sectionHeaderGradientColors,
     _WasteStats stats,
+    WasteSummary? summary,
     List<_QuickAction> quickActions,
     String normalizedName,
     bool showUserName,
@@ -759,11 +1011,117 @@ class _CitizenDashboardState extends State<CitizenDashboard>
           highlightColor,
           headerGradientColors,
           stats,
+          summary,
           quickActions,
           normalizedName,
           showUserName,
         );
     }
+  }
+
+  WasteSummary? get _currentTrackSummary {
+    final key = _trackDateKeyFormatter.format(
+      DateTime(
+        _selectedTrackDate.year,
+        _selectedTrackDate.month,
+        _selectedTrackDate.day,
+      ),
+    );
+    return _trackSummaries[key];
+  }
+
+  Future<void> _loadTrackDataForMonth(
+    DateTime referenceDate, {
+    bool forceRefresh = false,
+  }) async {
+    final DateTime monthStart =
+        DateTime(referenceDate.year, referenceDate.month, 1);
+    final String monthKey = _trackMonthKeyFormatter.format(monthStart);
+    if (!forceRefresh &&
+        _trackMonthKey == monthKey &&
+        _trackSummaries.isNotEmpty) {
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _isTrackDataLoading = true;
+      _trackDataError = null;
+    });
+
+    try {
+      final uri = Uri.parse(_trackApiBaseUrl).replace(
+        queryParameters: {
+          'from_date': _trackDateKeyFormatter.format(monthStart),
+          'key': _trackApiKey,
+        },
+      );
+      final response =
+          await http.get(uri).timeout(const Duration(seconds: 12));
+      if (response.statusCode != 200) {
+        throw Exception('Failed to fetch live data');
+      }
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final dataList = body['data'] as List<dynamic>?;
+      final Map<String, WasteSummary> freshData = {};
+      if (dataList != null) {
+        for (final raw in dataList) {
+          if (raw is Map<String, dynamic>) {
+            final summary = WasteSummary.fromJson(raw);
+            final String key = _trackDateKeyFormatter.format(summary.date);
+            freshData[key] = summary;
+          }
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _trackSummaries = freshData;
+        _trackMonthKey = monthKey;
+        _isTrackDataLoading = false;
+        _trackDataError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isTrackDataLoading = false;
+        _trackDataError = 'Unable to load live data. Pull down to retry.';
+      });
+    }
+  }
+
+  Future<void> _pickTrackDate(BuildContext context) async {
+    final now = DateTime.now();
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedTrackDate,
+      firstDate: DateTime(now.year - 2),
+      lastDate: DateTime(now.year + 1, 12, 31),
+      helpText: 'Pick a date to view collection',
+      builder: (context, child) {
+        final Widget picker = child ?? const SizedBox.shrink();
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+                  secondary: Theme.of(context).colorScheme.primary,
+                ),
+          ),
+          child: picker,
+        );
+      },
+    );
+    if (picked == null || !mounted) {
+      return;
+    }
+    final DateTime normalized = DateTime(picked.year, picked.month, picked.day);
+    final String newMonthKey =
+        _trackMonthKeyFormatter.format(DateTime(normalized.year, normalized.month, 1));
+    if (_trackMonthKey != newMonthKey || _trackSummaries.isEmpty) {
+      await _loadTrackDataForMonth(normalized);
+    }
+    if (!mounted) return;
+    setState(() {
+      _selectedTrackDate = normalized;
+    });
   }
 
   Widget _buildHomeTab(
@@ -777,6 +1135,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     Color highlightColor,
     List<Color> headerGradientColors,
     _WasteStats stats,
+    WasteSummary? summary,
     List<_QuickAction> quickActions,
     String normalizedName,
     bool showUserName,
@@ -922,6 +1281,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
               textColor: textColor,
               secondaryTextColor: secondaryTextColor,
               stats: stats,
+              summary: summary,
             ),
           ),
         ),
@@ -972,109 +1332,532 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     final double horizontalPadding =
         responsive.safeWidthPercent(0.05).clamp(16.0, 28.0);
     final double topSpacing =
-        responsive.safeHeightPercent(0.025).clamp(14.0, 28.0);
-    final double cardHeight =
-        responsive.safeHeightPercent(0.34).clamp(220.0, 320.0);
+        responsive.safeHeightPercent(0.03).clamp(16.0, 30.0);
     final double bottomPadding =
-        responsive.safeHeightPercent(0.12).clamp(70.0, 140.0);
-    final Color subtitleColor =
-        theme.colorScheme.onSurface.withValues(alpha: 0.65);
+        responsive.safeHeightPercent(0.12).clamp(70.0, 120.0);
+    final double summarySpacing =
+        responsive.safeHeightPercent(0.02).clamp(16.0, 24.0);
+    final WasteSummary? summary = _currentTrackSummary;
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(
-        horizontalPadding,
-        topSpacing,
-        horizontalPadding,
-        bottomPadding,
+    return RefreshIndicator(
+      onRefresh: () =>
+          _loadTrackDataForMonth(_selectedTrackDate, forceRefresh: true),
+      color: highlightColor,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(
+          horizontalPadding,
+          topSpacing,
+          horizontalPadding,
+          bottomPadding,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildTrackHeader(context, highlightColor, textColor),
+            SizedBox(height: summarySpacing),
+            _buildTrackSummarySection(
+              context: context,
+              summary: summary,
+              highlightColor: highlightColor,
+              textColor: textColor,
+            ),
+            SizedBox(height: summarySpacing * 1.2),
+            Text(
+              'Data refreshed for ${_trackDisplayFormat.format(_selectedTrackDate)}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildTrackSummarySection({
+    required BuildContext context,
+    required WasteSummary? summary,
+    required Color highlightColor,
+    required Color textColor,
+  }) {
+    if (_isTrackDataLoading) {
+      return _buildTrackStatusCard(
+        context: context,
+        message: 'Pulling live collection figures...',
+        accentColor: highlightColor,
+        showLoading: true,
+      );
+    }
+
+    if (_trackDataError != null) {
+      return _buildTrackStatusCard(
+        context: context,
+        message: _trackDataError!,
+        accentColor: highlightColor,
+        actionLabel: 'Retry now',
+        onAction: () =>
+            _loadTrackDataForMonth(_selectedTrackDate, forceRefresh: true),
+      );
+    }
+
+    if (summary == null) {
+      return _buildTrackStatusCard(
+        context: context,
+        message: 'No collection data is available for this date yet.',
+        accentColor: highlightColor,
+        actionLabel: 'Choose another date',
+        onAction: () => _pickTrackDate(context),
+      );
+    }
+
+    final theme = Theme.of(context);
+    final cards = <({
+      String asset,
+      String label,
+      double weight,
+      Color color,
+      _WasteMetric metric,
+    })>[
+      (
+        asset: 'assets/cards/wetwaste.png',
+        label: 'Wet Waste',
+        weight: summary.wetWeight,
+        color: const Color(0xFF1976D2),
+        metric: _WasteMetric.wet
+      ),
+      (
+        asset: 'assets/cards/drywaste.png',
+        label: 'Dry Waste',
+        weight: summary.dryWeight,
+        color: const Color(0xFF2E7D32),
+        metric: _WasteMetric.dry
+      ),
+      (
+        asset: 'assets/cards/mixedwaste.png',
+        label: 'Mixed Waste',
+        weight: summary.mixWeight,
+        color: const Color(0xFFF57F17),
+        metric: _WasteMetric.mixed
+      ),
+    ];
+    return SizedBox(
+      width: double.infinity,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Track Your Waste',
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: textColor,
-            ),
+          _buildHeroSummaryCard(context, summary, highlightColor, textColor),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const double gap = 12;
+              final children = <Widget>[];
+              for (var i = 0; i < cards.length; i++) {
+                final data = cards[i];
+                children.add(
+                  Expanded(
+                    child: _WasteImageStatCard(
+                      assetPath: data.asset,
+                      label: data.label,
+                      weight: data.weight,
+                      accentColor: data.color,
+                      formatter: _trackWeightFormatter,
+                      isSelected: _activeWasteMetric == data.metric,
+                      onTap: () => _handleMetricSelection(data.metric),
+                    ),
+                  ),
+                );
+                if (i != cards.length - 1) {
+                  children.add(const SizedBox(width: gap));
+                }
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: children,
+              );
+            },
           ),
-          const SizedBox(height: 6),
-          Text(
-            'Monitor wet, dry and mixed collection streams with immersive visuals.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: subtitleColor,
-            ),
-          ),
-          SizedBox(height: topSpacing),
-          SizedBox(
-            height: cardHeight,
-            child: _buildWasteCardCarousel(),
-          ),
-          SizedBox(height: topSpacing * 0.8),
-          _buildWasteTrendChart(
-            context,
-            highlightColor,
-            subtitleColor,
+          const SizedBox(height: 18),
+          _buildMetricDetailCard(
+            context: context,
+            summary: summary,
+            highlightColor: highlightColor,
+            textColor: textColor,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildWasteCardCarousel() {
-    return PageView.builder(
-      controller: _wasteCardController,
-      physics: const BouncingScrollPhysics(),
-      itemCount: _wasteVisualCards.length,
-      itemBuilder: (context, index) {
-        final card = _wasteVisualCards[index];
-        final double depth = (_wasteCarouselPage - index).abs();
-        final double translationY = (depth * 32).clamp(0, 56);
-        final double scale = (1 - depth * 0.08).clamp(0.88, 1.0);
-        final double opacity = (1 - depth * 0.25).clamp(0.5, 1.0);
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Transform.translate(
-            offset: Offset(0, translationY),
-            child: Transform.scale(
-              scale: scale,
-              alignment: Alignment.topCenter,
-              child: Opacity(
-                opacity: opacity,
-                child: _WasteHeroCard(
-                  card: card,
-                  onInfoTap: () => _showWasteInfo(card),
-                ),
+  void _handleMetricSelection(_WasteMetric metric) {
+    if (_activeWasteMetric == metric) {
+      setState(() => _activeWasteMetric = _WasteMetric.total);
+    } else {
+      setState(() => _activeWasteMetric = metric);
+    }
+  }
+
+  double _metricWeightForSummary(WasteSummary summary, _WasteMetric metric) {
+    switch (metric) {
+      case _WasteMetric.wet:
+        return summary.wetWeight;
+      case _WasteMetric.dry:
+        return summary.dryWeight;
+      case _WasteMetric.mixed:
+        return summary.mixWeight;
+      case _WasteMetric.total:
+        return summary.totalNetWeight;
+    }
+  }
+
+  String _metricHeaderText(_WasteMetric metric) {
+    switch (metric) {
+      case _WasteMetric.wet:
+        return 'Wet waste collected';
+      case _WasteMetric.dry:
+        return 'Dry waste collected';
+      case _WasteMetric.mixed:
+        return 'Mixed waste collected';
+      case _WasteMetric.total:
+        return 'Total waste collected';
+    }
+  }
+
+  Color _metricAccentColor(_WasteMetric metric, Color highlightColor) {
+    switch (metric) {
+      case _WasteMetric.wet:
+        return const Color(0xFF1976D2);
+      case _WasteMetric.dry:
+        return const Color(0xFF2E7D32);
+      case _WasteMetric.mixed:
+        return const Color(0xFFF57F17);
+      case _WasteMetric.total:
+        return highlightColor;
+    }
+  }
+
+  Widget _buildMetricDetailCard({
+    required BuildContext context,
+    required WasteSummary summary,
+    required Color highlightColor,
+    required Color textColor,
+  }) {
+    final theme = Theme.of(context);
+    final metric = _activeWasteMetric;
+    final double weight = _metricWeightForSummary(summary, metric);
+    final Color accent = _metricAccentColor(metric, highlightColor);
+    final String weightLabel =
+        '${_trackWeightFormatter.format(weight)} kg';
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.fastEaseInToSlowEaseOut,
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: accent.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 260),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            child: Text(
+              _metricHeaderText(metric),
+              key: ValueKey<String>('metric-header-${metric.name}'),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: textColor.withValues(alpha: 0.8),
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
-        );
-      },
+          const SizedBox(height: 6),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 320),
+            switchInCurve: Curves.easeOutBack,
+            switchOutCurve: Curves.easeInBack,
+            child: Text(
+              weightLabel,
+              key: ValueKey<String>('metric-weight-$weightLabel'),
+              style: theme.textTheme.headlineSmall?.copyWith(
+                color: textColor,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            metric == _WasteMetric.total
+                ? 'Tap a card above to view detailed breakdown.'
+                : 'Tap again to switch back to total waste.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: textColor.withValues(alpha: 0.6),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildWasteTrendChart(
+  Widget _buildHeroSummaryCard(
     BuildContext context,
+    WasteSummary summary,
     Color highlightColor,
-    Color subtitleColor,
+    Color textColor,
   ) {
     final theme = Theme.of(context);
-    final Color outline = theme.colorScheme.outline.withOpacity(0.25);
-    final Color surface = theme.colorScheme.surface;
-    final chartData =
-        _wasteTrendDataset[_selectedTrendRange] ?? const <Map<String, Object>>[];
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 420),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            highlightColor.withOpacity(0.96),
+            highlightColor.withOpacity(0.68),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: highlightColor.withOpacity(0.32),
+            blurRadius: 32,
+            offset: const Offset(0, 18),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Total trips',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.white70,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    summary.totalTrip.toString(),
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'Avg per trip',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.white70,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${_trackAverageFormatter.format(summary.averageWeightPerTrip)} kg',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Total weight',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: Colors.white.withOpacity(0.9),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${_trackWeightFormatter.format(summary.totalNetWeight)} kg',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Live data for ${_trackDisplayFormat.format(summary.date)}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: Colors.white.withOpacity(0.85),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    return _WasteTrendVisualizer(
-      chartData: chartData,
-      subtitleColor: subtitleColor,
-      outlineColor: outline,
-      surfaceColor: surface,
-      highlightColor: highlightColor,
-      selectedRange: _selectedTrendRange,
-      onRangeChanged: (range) {
-        setState(() {
-          _selectedTrendRange = range;
-        });
-      },
+  Widget _buildTrackStatusCard({
+    required BuildContext context,
+    required String message,
+    required Color accentColor,
+    bool showLoading = false,
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 32,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (showLoading)
+            Row(
+              children: [
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: accentColor,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else
+            Text(
+              message,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          if (actionLabel != null && onAction != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: onAction,
+                child: Text(actionLabel),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrackHeader(
+    BuildContext context,
+    Color highlightColor,
+    Color textColor,
+  ) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Track Your Waste',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: textColor,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Live weighment figures from the city for the selected date.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: () => _pickTrackDate(context),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: highlightColor.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: highlightColor.withOpacity(0.35)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Icon(Icons.calendar_month,
+                      size: 20, color: highlightColor),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Calendar',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: highlightColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 280),
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: child,
+                        ),
+                        child: Text(
+                          _trackShortDisplayFormat.format(_selectedTrackDate),
+                          key: ValueKey(_selectedTrackDate.day),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: highlightColor,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1453,93 +2236,6 @@ class _CitizenDashboardState extends State<CitizenDashboard>
   }
 
 
-  Future<void> _showWasteInfo(_WasteVisualCard card) async {
-    if (!mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        final theme = Theme.of(sheetContext);
-        final Color accent = card.accentColor;
-        final bottomInset = MediaQuery.of(sheetContext).padding.bottom;
-        return Padding(
-          padding: EdgeInsets.fromLTRB(24, 20, 24, 20 + bottomInset),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      card.title,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => Navigator.of(sheetContext).pop(),
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Types: ${card.tagline}',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                card.description,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  color: accent.withOpacity(0.08),
-                  border: Border.all(color: accent.withOpacity(0.3)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.lightbulb_outline, color: accent),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Segregation tip',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            color: accent,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Keep the listed materials ready in separate bins to help our crew lift faster.',
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   Widget _buildNotificationBell(
     BuildContext context, {
     required Color iconColor,
@@ -1686,7 +2382,10 @@ class _CitizenDashboardState extends State<CitizenDashboard>
     final highlightColor =
         isDarkMode ? colorScheme.secondary : colorScheme.primary;
 
-    final stats = _wasteStats[_selectedPeriod]!;
+    final WasteSummary? activeSummary = _currentTrackSummary;
+    final stats = activeSummary != null
+        ? _statsFromSummary(activeSummary)
+        : _wasteStats[_selectedPeriod]!;
 
     final quickActions = [
       _QuickAction(
@@ -1752,6 +2451,7 @@ class _CitizenDashboardState extends State<CitizenDashboard>
       headerGradientColors,
       sectionHeaderGradientColors,
       stats,
+      activeSummary,
       quickActions,
       normalizedName,
       showUserName,
@@ -1823,563 +2523,6 @@ const List<_BottomNavItem> _orderedNavItems = [
   _BottomNavItem.profile,
 ];
 
-enum WasteTrendRange { daily, weekly, monthly, yearly }
-
-extension WasteTrendRangeLabel on WasteTrendRange {
-  String get label {
-    switch (this) {
-      case WasteTrendRange.daily:
-        return 'Daily';
-      case WasteTrendRange.weekly:
-        return 'Weekly';
-      case WasteTrendRange.monthly:
-        return 'Monthly';
-      case WasteTrendRange.yearly:
-        return 'Yearly';
-    }
-  }
-}
-
-class _WasteVisualCard {
-  const _WasteVisualCard({
-    required this.title,
-    required this.tagline,
-    required this.description,
-    required this.assetPath,
-    required this.accentColor,
-  });
-
-  final String title;
-  final String tagline;
-  final String description;
-  final String assetPath;
-  final Color accentColor;
-}
-
-const List<_WasteVisualCard> _wasteVisualCards = [
-  _WasteVisualCard(
-    title: 'Wet Waste',
-    tagline: 'Organic & compostable',
-    description:
-        'Sorted kitchen scraps and food leftovers ready to become nutrient rich compost.',
-    assetPath: 'assets/cards/wetwaste.png',
-    accentColor: Color(0xFF42A5F5),
-  ),
-  _WasteVisualCard(
-    title: 'Dry Waste',
-    tagline: 'Paper • Plastic • Metal',
-    description:
-        'Clean recyclables stacked for faster pickup ensuring better resale value.',
-    assetPath: 'assets/cards/drywaste.png',
-    accentColor: Color(0xFF2E7D32),
-  ),
-  _WasteVisualCard(
-    title: 'Mixed Waste',
-    tagline: 'Requires sorting',
-    description:
-        'Residual waste waiting for final inspection before dispatch to the landfill.',
-    assetPath: 'assets/cards/mixedwaste.png',
-    accentColor: Color(0xFFFFB74D),
-  ),
-];
-
-const List<Color> _wasteChartPalette = [
-  Color(0xFF42A5F5),
-  Color(0xFF2E7D32),
-  Color(0xFFFFB74D),
-];
-
-const Map<WasteTrendRange, List<Map<String, Object>>> _wasteTrendDataset = {
-  WasteTrendRange.daily: [
-    {'period': 'Mon', 'type': 'Wet', 'value': 1.2},
-    {'period': 'Mon', 'type': 'Dry', 'value': 0.8},
-    {'period': 'Mon', 'type': 'Mixed', 'value': 0.4},
-    {'period': 'Tue', 'type': 'Wet', 'value': 1.0},
-    {'period': 'Tue', 'type': 'Dry', 'value': 0.9},
-    {'period': 'Tue', 'type': 'Mixed', 'value': 0.5},
-    {'period': 'Wed', 'type': 'Wet', 'value': 1.4},
-    {'period': 'Wed', 'type': 'Dry', 'value': 1.0},
-    {'period': 'Wed', 'type': 'Mixed', 'value': 0.6},
-    {'period': 'Thu', 'type': 'Wet', 'value': 1.1},
-    {'period': 'Thu', 'type': 'Dry', 'value': 0.85},
-    {'period': 'Thu', 'type': 'Mixed', 'value': 0.45},
-    {'period': 'Fri', 'type': 'Wet', 'value': 1.35},
-    {'period': 'Fri', 'type': 'Dry', 'value': 0.95},
-    {'period': 'Fri', 'type': 'Mixed', 'value': 0.5},
-    {'period': 'Sat', 'type': 'Wet', 'value': 1.5},
-    {'period': 'Sat', 'type': 'Dry', 'value': 1.1},
-    {'period': 'Sat', 'type': 'Mixed', 'value': 0.55},
-    {'period': 'Sun', 'type': 'Wet', 'value': 1.0},
-    {'period': 'Sun', 'type': 'Dry', 'value': 0.7},
-    {'period': 'Sun', 'type': 'Mixed', 'value': 0.4},
-  ],
-  WasteTrendRange.weekly: [
-    {'period': 'Week 1', 'type': 'Wet', 'value': 7.1},
-    {'period': 'Week 1', 'type': 'Dry', 'value': 5.2},
-    {'period': 'Week 1', 'type': 'Mixed', 'value': 2.1},
-    {'period': 'Week 2', 'type': 'Wet', 'value': 7.6},
-    {'period': 'Week 2', 'type': 'Dry', 'value': 5.4},
-    {'period': 'Week 2', 'type': 'Mixed', 'value': 2.4},
-    {'period': 'Week 3', 'type': 'Wet', 'value': 7.9},
-    {'period': 'Week 3', 'type': 'Dry', 'value': 5.6},
-    {'period': 'Week 3', 'type': 'Mixed', 'value': 2.3},
-    {'period': 'Week 4', 'type': 'Wet', 'value': 8.2},
-    {'period': 'Week 4', 'type': 'Dry', 'value': 5.8},
-    {'period': 'Week 4', 'type': 'Mixed', 'value': 2.5},
-  ],
-  WasteTrendRange.monthly: [
-    {'period': 'Jan', 'type': 'Wet', 'value': 31},
-    {'period': 'Jan', 'type': 'Dry', 'value': 21},
-    {'period': 'Jan', 'type': 'Mixed', 'value': 10},
-    {'period': 'Feb', 'type': 'Wet', 'value': 29},
-    {'period': 'Feb', 'type': 'Dry', 'value': 22},
-    {'period': 'Feb', 'type': 'Mixed', 'value': 9},
-    {'period': 'Mar', 'type': 'Wet', 'value': 33},
-    {'period': 'Mar', 'type': 'Dry', 'value': 23},
-    {'period': 'Mar', 'type': 'Mixed', 'value': 11},
-    {'period': 'Apr', 'type': 'Wet', 'value': 34},
-    {'period': 'Apr', 'type': 'Dry', 'value': 24},
-    {'period': 'Apr', 'type': 'Mixed', 'value': 10},
-    {'period': 'May', 'type': 'Wet', 'value': 32},
-    {'period': 'May', 'type': 'Dry', 'value': 25},
-    {'period': 'May', 'type': 'Mixed', 'value': 12},
-    {'period': 'Jun', 'type': 'Wet', 'value': 35},
-    {'period': 'Jun', 'type': 'Dry', 'value': 26},
-    {'period': 'Jun', 'type': 'Mixed', 'value': 13},
-  ],
-  WasteTrendRange.yearly: [
-    {'period': '2021', 'type': 'Wet', 'value': 380},
-    {'period': '2021', 'type': 'Dry', 'value': 270},
-    {'period': '2021', 'type': 'Mixed', 'value': 120},
-    {'period': '2022', 'type': 'Wet', 'value': 395},
-    {'period': '2022', 'type': 'Dry', 'value': 290},
-    {'period': '2022', 'type': 'Mixed', 'value': 130},
-    {'period': '2023', 'type': 'Wet', 'value': 410},
-    {'period': '2023', 'type': 'Dry', 'value': 305},
-    {'period': '2023', 'type': 'Mixed', 'value': 138},
-    {'period': '2024', 'type': 'Wet', 'value': 428},
-    {'period': '2024', 'type': 'Dry', 'value': 320},
-    {'period': '2024', 'type': 'Mixed', 'value': 142},
-  ],
-};
-
-class _WasteTrendVisualizer extends StatefulWidget {
-  const _WasteTrendVisualizer({
-    required this.chartData,
-    required this.subtitleColor,
-    required this.outlineColor,
-    required this.surfaceColor,
-    required this.highlightColor,
-    required this.selectedRange,
-    required this.onRangeChanged,
-  });
-
-  final List<Map<String, Object>> chartData;
-  final Color subtitleColor;
-  final Color outlineColor;
-  final Color surfaceColor;
-  final Color highlightColor;
-  final WasteTrendRange selectedRange;
-  final ValueChanged<WasteTrendRange> onRangeChanged;
-
-  @override
-  State<_WasteTrendVisualizer> createState() => _WasteTrendVisualizerState();
-}
-
-class _WasteTrendVisualizerState extends State<_WasteTrendVisualizer>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 10),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final wave = Curves.easeInOut.transform(_controller.value);
-        final glowColor =
-            widget.highlightColor.withOpacity(0.18 + wave * 0.12);
-        final accent = widget.highlightColor.withOpacity(0.08 + (1 - wave) * 0.1);
-        return Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                widget.surfaceColor,
-                widget.surfaceColor.withOpacity(0.94),
-                widget.surfaceColor.withOpacity(0.88),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: widget.outlineColor),
-            boxShadow: [
-              BoxShadow(
-                color: glowColor,
-                blurRadius: 38,
-                offset: const Offset(0, 18),
-              ),
-            ],
-          ),
-          child: Stack(
-            children: [
-              Positioned(
-                top: -80 + wave * 24,
-                right: -40,
-                child: _GlowingBlob(
-                  size: 220 + wave * 30,
-                  color: glowColor,
-                  rotation: wave * 0.9,
-                ),
-              ),
-              Positioned(
-                bottom: -90 - wave * 20,
-                left: -30,
-                child: _GlowingBlob(
-                  size: 210 - wave * 40,
-                  color: accent,
-                  rotation: -wave * 0.7,
-                ),
-              ),
-              child!,
-            ],
-          ),
-        );
-      },
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Collection trends',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: widget.outlineColor),
-                    color: widget.surfaceColor.withOpacity(0.85),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<WasteTrendRange>(
-                      value: widget.selectedRange,
-                      dropdownColor: widget.surfaceColor,
-                      items: WasteTrendRange.values
-                          .map(
-                            (range) => DropdownMenuItem(
-                              value: range,
-                              child: Text(range.label),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (range) {
-                        if (range != null) {
-                          widget.onRangeChanged(range);
-                        }
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Compare wet, dry and mixed waste for the selected period.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: widget.subtitleColor,
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              height: 260,
-              child: _buildChart(theme),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChart(ThemeData theme) {
-    if (widget.chartData.isEmpty) {
-      return Center(
-        child: Text(
-          'No data for this range',
-          style: theme.textTheme.bodyMedium,
-        ),
-      );
-    }
-
-    final palette = _wasteChartPalette
-        .map((color) => color.withOpacity(0.9))
-        .toList(growable: false);
-
-    return graphic.Chart(
-      data: widget.chartData,
-      variables: {
-        'period': graphic.Variable(
-          accessor: (Map map) => map['period'] as String,
-        ),
-        'value': graphic.Variable(
-          accessor: (Map map) => map['value'] as num,
-          scale: graphic.LinearScale(min: 0, niceRange: true),
-        ),
-        'type': graphic.Variable(
-          accessor: (Map map) => map['type'] as String,
-        ),
-      },
-      marks: [
-        graphic.IntervalMark(
-          position: graphic.Varset('period') * graphic.Varset('value'),
-          color: graphic.ColorEncode(
-            variable: 'type',
-            values: palette,
-          ),
-          size: graphic.SizeEncode(value: 12),
-          modifiers: [
-            graphic.DodgeModifier(ratio: 0.35),
-          ],
-          shape: graphic.ShapeEncode(
-            value: graphic.RectShape(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-        graphic.LineMark(
-          position: graphic.Varset('period') * graphic.Varset('value'),
-          color: graphic.ColorEncode(
-            variable: 'type',
-            values: _wasteChartPalette,
-          ),
-          size: graphic.SizeEncode(value: 3.2),
-          shape: graphic.ShapeEncode(
-            value: graphic.BasicLineShape(smooth: true),
-          ),
-        ),
-        graphic.PointMark(
-          position: graphic.Varset('period') * graphic.Varset('value'),
-          color: graphic.ColorEncode(
-            variable: 'type',
-            values: _wasteChartPalette,
-          ),
-          size: graphic.SizeEncode(value: 7),
-        ),
-      ],
-      axes: [
-        graphic.Defaults.horizontalAxis,
-        graphic.Defaults.verticalAxis,
-      ],
-      selections: {
-        'hover': graphic.PointSelection(
-          on: {graphic.GestureType.hover, graphic.GestureType.tap},
-          devices: {PointerDeviceKind.mouse, PointerDeviceKind.touch},
-        ),
-      },
-      tooltip: graphic.TooltipGuide(
-        followPointer: const [true, true],
-        align: Alignment.topLeft,
-        backgroundColor: widget.surfaceColor,
-      ),
-    );
-  }
-}
-
-class _GlowingBlob extends StatelessWidget {
-  const _GlowingBlob({
-    required this.size,
-    required this.color,
-    required this.rotation,
-  });
-
-  final double size;
-  final Color color;
-  final double rotation;
-
-  @override
-  Widget build(BuildContext context) {
-    return Transform.rotate(
-      angle: rotation,
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [
-              color,
-              color.withOpacity(0),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _WasteHeroCard extends StatelessWidget {
-  const _WasteHeroCard({
-    required this.card,
-    required this.onInfoTap,
-  });
-
-  final _WasteVisualCard card;
-  final VoidCallback onInfoTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: card.accentColor.withOpacity(0.25),
-            blurRadius: 30,
-            offset: const Offset(0, 18),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(32),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Image.asset(
-              card.assetPath,
-              fit: BoxFit.cover,
-            ),
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.black.withOpacity(0.35),
-                    card.accentColor.withOpacity(0.08),
-                  ],
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                ),
-              ),
-            ),
-            Positioned(
-              top: 18,
-              right: 18,
-              child: _GlassInfoButton(onTap: onInfoTap),
-            ),
-            Positioned(
-              left: 24,
-              right: 24,
-              bottom: 28,
-              child: Text(
-                card.title,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.6,
-                  shadows: const [
-                    Shadow(
-                      color: Colors.black54,
-                      blurRadius: 18,
-                      offset: Offset(0, 6),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _GlassInfoButton extends StatelessWidget {
-  const _GlassInfoButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipOval(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Material(
-          color: Colors.white.withOpacity(0.2),
-          child: InkWell(
-            onTap: onTap,
-            child: const SizedBox(
-              width: 38,
-              height: 38,
-              child: Icon(
-                Icons.info_outline,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-String _navLabel(_BottomNavItem item) {
-  switch (item) {
-    case _BottomNavItem.home:
-      return 'Home';
-    case _BottomNavItem.track:
-      return 'Track';
-    case _BottomNavItem.map:
-      return 'Map';
-    case _BottomNavItem.profile:
-      return 'Profile';
-  }
-}
-
-_BottomNavItem? _navItemFromLabel(String label) {
-  switch (label) {
-    case 'Home':
-      return _BottomNavItem.home;
-    case 'Track':
-      return _BottomNavItem.track;
-    case 'Map':
-      return _BottomNavItem.map;
-    case 'Profile':
-      return _BottomNavItem.profile;
-    default:
-      return null;
-  }
-}
-
-_BottomNavItem? _navItemFromIndex(int index) {
-  if (index >= 0 && index < _orderedNavItems.length) {
-    return _orderedNavItems[index];
-  }
-  return null;
-}
-
 class _WasteStats {
   const _WasteStats({
     required this.dry,
@@ -2395,35 +2538,35 @@ class _WasteStats {
 class _WasteBarData {
   const _WasteBarData({
     required this.label,
-    required this.valueLabel,
     required this.value,
+    required this.valueLabel,
     required this.color,
   });
 
   final String label;
-  final String valueLabel;
   final double value;
+  final String valueLabel;
   final Color color;
 }
 
 const List<_WasteBarData> _collectionProgressItems = [
   _WasteBarData(
     label: 'Wet',
-    valueLabel: '70% wet',
-    value: 70,
-    color: Color(0xFF1E88E5),
+    value: 40,
+    valueLabel: 'Wet 40%',
+    color: Color(0xFF1976D2),
   ),
   _WasteBarData(
     label: 'Dry',
-    valueLabel: '60% dry',
-    value: 60,
+    value: 32,
+    valueLabel: 'Dry 32%',
     color: Color(0xFF2E7D32),
   ),
   _WasteBarData(
     label: 'Mixed',
-    valueLabel: '60% mixed',
-    value: 60,
-    color: Color.fromARGB(255, 248, 139, 14),
+    value: 28,
+    valueLabel: 'Mixed 28%',
+    color: Color(0xFFF57F17),
   ),
 ];
 
@@ -2499,7 +2642,7 @@ class _WasteRadialBreakdownState extends State<_WasteRadialBreakdown>
       if (oldItem.label != newItem.label ||
           oldItem.valueLabel != newItem.valueLabel ||
           oldItem.value != newItem.value ||
-          oldItem.color.toARGB32() != newItem.color.toARGB32()) {
+          oldItem.color.value != newItem.color.value) {
         return true;
       }
     }
