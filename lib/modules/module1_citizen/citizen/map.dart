@@ -341,8 +341,8 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ),
       Marker(
-        width: 68,
-        height: 68,
+        width: 30,
+        height: 30,
         point: _gammaCenter,
         child: _buildGammaFacilityMarker(),
       ),

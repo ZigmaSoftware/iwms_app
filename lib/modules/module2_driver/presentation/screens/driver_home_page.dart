@@ -21,6 +21,38 @@ const Duration _kStartButtonAnimationDuration = Duration(milliseconds: 280);
 const double _kBottomNavigationHeight = 10;
 const double _kStopMarkerDiameter = 32;
 
+enum _DriverMapThemeOption { light, standard }
+
+class _DriverMapThemeConfig {
+  const _DriverMapThemeConfig({
+    required this.label,
+    required this.urlTemplate,
+    required this.subdomains,
+    required this.attribution,
+  });
+
+  final String label;
+  final String urlTemplate;
+  final List<String> subdomains;
+  final String attribution;
+}
+
+const Map<_DriverMapThemeOption, _DriverMapThemeConfig> _driverMapThemes = {
+  _DriverMapThemeOption.light: _DriverMapThemeConfig(
+    label: 'Light',
+    urlTemplate:
+        'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    subdomains: ['a', 'b', 'c', 'd'],
+    attribution: '© OpenStreetMap, © CARTO',
+  ),
+  _DriverMapThemeOption.standard: _DriverMapThemeConfig(
+    label: 'Standard',
+    urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c'],
+    attribution: '© OpenStreetMap contributors',
+  ),
+};
+
 String _formatMetricValue(double? value, String unit, {int decimals = 1}) {
   if (value == null) return '--';
   return '${value.toStringAsFixed(decimals)} $unit';
@@ -1243,7 +1275,7 @@ class _StartButtonOverlay extends StatelessWidget {
   }
 }
 
-class _FullMapPage extends StatelessWidget {
+class _FullMapPage extends StatefulWidget {
   const _FullMapPage({
     required this.origin,
     required this.routePoints,
@@ -1256,81 +1288,58 @@ class _FullMapPage extends StatelessWidget {
   final List<_DemoStop> stops;
   final VehicleModel? vehicle;
 
-  void _showTripSummarySheet(
-      BuildContext context, VehicleModel? liveVehicle) {
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (_) {
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Route summary',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-                const SizedBox(height: 12),
-                _tripLiveVehicleSummary(liveVehicle),
-                const SizedBox(height: 20),
-                const Text(
-                  'Stops',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 240,
-                  child: SingleChildScrollView(
-                    child: _StopDropdown(stops: stops),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+  @override
+  State<_FullMapPage> createState() => _FullMapPageState();
+}
+
+class _FullMapPageState extends State<_FullMapPage> {
+  final MapController _mapController = MapController();
+  _DriverMapThemeOption _selectedTheme = _DriverMapThemeOption.light;
+
+  void _setTheme(_DriverMapThemeOption option) {
+    if (_selectedTheme == option) return;
+    setState(() => _selectedTheme = option);
   }
 
   @override
   Widget build(BuildContext context) {
-    final routeLinePoints = <LatLng>[origin, ...routePoints];
-    final mapController = MapController();
-    final liveVehicle = vehicle;
-    final headline = stops.isNotEmpty
-        ? 'Heading to ${stops.last.label}'
+    final routeLinePoints = <LatLng>[widget.origin, ...widget.routePoints];
+    final liveVehicle = widget.vehicle;
+    final nextStop = widget.stops.isNotEmpty ? widget.stops.first : null;
+    final remainingStops =
+        widget.stops.isNotEmpty ? widget.stops.length - 1 : 0;
+    final size = MediaQuery.of(context).size;
+    final headerHeight = size.height * 0.24;
+    final headerStatusContent = nextStop != null
+        ? _DriverHeaderNextStop(stop: nextStop, remainingStops: remainingStops)
+        : null;
+    final headline = widget.stops.isNotEmpty
+        ? 'Heading to ${widget.stops.last.label}'
         : 'Trip tracking';
     final statusSecondary =
-        '${stops.length} stops • ${routePoints.isNotEmpty ? routePoints.length : 0} legs';
+        '${widget.stops.length} stops | ${widget.routePoints.isNotEmpty ? widget.routePoints.length : 0} legs';
+    final themeConfig = _driverMapThemes[_selectedTheme]!;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F8),
       body: SafeArea(
         child: Column(
           children: [
-            TrackingHeroHeader(
-              contextLabel: liveVehicle?.registrationNumber ?? 'Trip tracking',
-              headline: headline,
-              statusPrimary:
-                  liveVehicle?.lastUpdated ?? 'Awaiting telemetry update',
-              statusSecondary: statusSecondary,
-              onBack: () => Navigator.of(context).maybePop(),
-              onShare: () => _showTripSummarySheet(context, liveVehicle),
-              onRefresh: () => mapController.move(origin, 15),
+            SizedBox(
+              height: headerHeight,
+              width: double.infinity,
+              child: TrackingHeroHeader(
+                contextLabel: liveVehicle?.registrationNumber ?? 'Trip tracking',
+                headline: headline,
+                statusPrimary:
+                    liveVehicle?.lastUpdated ?? 'Awaiting telemetry update',
+                statusSecondary: statusSecondary,
+                statusContent: headerStatusContent,
+                onBack: () => Navigator.of(context).maybePop(),
+                onRefresh: () => _mapController.move(widget.origin, 15),
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 4),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1352,9 +1361,9 @@ class _FullMapPage extends StatelessWidget {
                       children: [
                         Positioned.fill(
                           child: FlutterMap(
-                            mapController: mapController,
+                            mapController: _mapController,
                             options: MapOptions(
-                              initialCenter: origin,
+                              initialCenter: widget.origin,
                               initialZoom: 15,
                               minZoom: 10,
                               maxZoom: 18,
@@ -1365,12 +1374,11 @@ class _FullMapPage extends StatelessWidget {
                             ),
                             children: [
                               TileLayer(
-                                urlTemplate:
-                                    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                subdomains: const ['a', 'b', 'c'],
+                                urlTemplate: themeConfig.urlTemplate,
+                                subdomains: themeConfig.subdomains,
                                 userAgentPackageName: 'com.iwms.citizen.app',
                               ),
-                              if (routePoints.isNotEmpty)
+                              if (widget.routePoints.isNotEmpty)
                                 PolylineLayer(
                                   polylines: [
                                     Polyline(
@@ -1385,11 +1393,11 @@ class _FullMapPage extends StatelessWidget {
                                   Marker(
                                     width: 44,
                                     height: 44,
-                                    point: origin,
+                                    point: widget.origin,
                                     child:
                                         const _DriverMarker(isActive: true),
                                   ),
-                                  ...stops.asMap().entries.map((entry) {
+                                  ...widget.stops.asMap().entries.map((entry) {
                                     final idx = entry.key;
                                     final stop = entry.value;
                                     return Marker(
@@ -1399,35 +1407,36 @@ class _FullMapPage extends StatelessWidget {
                                       child: _StopMarker(
                                         index: idx + 1,
                                         label: stop.label,
-                                        isDestination: idx == stops.length - 1,
+                                        isDestination:
+                                            idx == widget.stops.length - 1,
                                       ),
                                     );
                                   }),
                                 ],
                               ),
+                              RichAttributionWidget(
+                                alignment: AttributionAlignment.bottomRight,
+                                attributions: [
+                                  TextSourceAttribution(
+                                    themeConfig.attribution,
+                                    onTap: () {},
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
-                        if (stops.isNotEmpty)
-                          Positioned(
-                            top: 12,
-                            left: 16,
-                            right: 16,
-                            child: SafeArea(
-                              bottom: false,
-                              child: Align(
-                                alignment: Alignment.topCenter,
-                                child: _NextStopFloatingChip(
-                                  stop: stops.first,
-                                  remainingStops:
-                                      stops.isNotEmpty ? stops.length - 1 : 0,
-                                ),
-                              ),
-                            ),
+                        Positioned(
+                          left: 16,
+                          bottom: 140,
+                          child: _DriverMapStyleSelector(
+                            selected: _selectedTheme,
+                            onSelected: _setTheme,
                           ),
+                        ),
                         DraggableScrollableSheet(
-                          initialChildSize: 0.3,
-                          minChildSize: 0.22,
+                          initialChildSize: 0.24,
+                          minChildSize: 0.18,
                           maxChildSize: 0.78,
                           builder: (context, scrollController) {
                             return Container(
@@ -1479,16 +1488,22 @@ class _FullMapPage extends StatelessWidget {
                                           const Icon(Icons.route_rounded,
                                               color: _driverPrimary),
                                           const SizedBox(width: 8),
-                                          Text(
-                                            '${routePoints.length} scheduled stops -> ${routePoints.isNotEmpty ? routePoints.length - 1 : 0} legs',
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.w600),
+                                          Expanded(
+                                            child: Text(
+                                              '${widget.routePoints.length} scheduled stops -> ${widget.routePoints.isNotEmpty ? widget.routePoints.length - 1 : 0} legs',
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.w600),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
                                           ),
-                                          const Spacer(),
+                                          const SizedBox(width: 8),
                                           TextButton.icon(
-                                            onPressed: () => mapController.move(
-                                                origin,
-                                                mapController.camera.zoom),
+                                            onPressed: () =>
+                                                _mapController.move(
+                                                    widget.origin,
+                                                    _mapController
+                                                        .camera.zoom),
                                             icon: const Icon(
                                               Icons.center_focus_strong_rounded,
                                               color: _driverPrimary,
@@ -1512,7 +1527,7 @@ class _FullMapPage extends StatelessWidget {
                                         ),
                                       ),
                                       const SizedBox(height: 8),
-                                      _StopDropdown(stops: stops),
+                _StopDropdown(stops: widget.stops),
                                     ],
                                   ),
                                 ),
@@ -1529,94 +1544,6 @@ class _FullMapPage extends StatelessWidget {
             const SizedBox(height: 16),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _NextStopFloatingChip extends StatelessWidget {
-  const _NextStopFloatingChip({
-    required this.stop,
-    required this.remainingStops,
-  });
-
-  final _DemoStop stop;
-  final int remainingStops;
-
-  @override
-  Widget build(BuildContext context) {
-    final statusText =
-        remainingStops <= 0 ? 'Final stop' : '$remainingStops left';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-      constraints: const BoxConstraints(maxWidth: 380),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(40),
-        border: Border.all(color: _driverPrimary.withOpacity(0.08)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.12),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: _driverAccent.withOpacity(0.2),
-            child: const Icon(Icons.navigation_rounded,
-                color: _driverAccent, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Next stop',
-                  style: TextStyle(
-                    fontSize: 11,
-                    letterSpacing: 0.2,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black.withOpacity(0.6),
-                  ),
-                ),
-                Text(
-                  stop.label,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (stop.detail != null)
-                  Text(
-                    stop.detail!,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.black54,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 14),
-          Text(
-            statusText,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: _driverPrimary,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1648,6 +1575,169 @@ class _HistoryTab extends StatelessWidget {
         final entry = _weeklyHistory[index];
         return _HistoryCard(entry: entry);
       },
+    );
+  }
+}
+
+class _DriverHeaderNextStop extends StatelessWidget {
+  const _DriverHeaderNextStop({
+    required this.stop,
+    required this.remainingStops,
+  });
+
+  final _DemoStop stop;
+  final int remainingStops;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusText = remainingStops <= 0
+        ? 'Final stop'
+        : remainingStops == 1
+            ? '1 stop left'
+            : '$remainingStops stops left';
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(36),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.max,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.navigation_rounded,
+                      color: Colors.white, size: 16),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Next stop',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      Text(
+                        stop.label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (stop.detail != null)
+                        Text(
+                          stop.detail!,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.8),
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          statusText,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _DriverMapStyleSelector extends StatelessWidget {
+  const _DriverMapStyleSelector({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final _DriverMapThemeOption selected;
+  final ValueChanged<_DriverMapThemeOption> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 16,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: _DriverMapThemeOption.values.map((option) {
+          final config = _driverMapThemes[option]!;
+          final isSelected = option == selected;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text(config.label),
+              selected: isSelected,
+              onSelected: (value) {
+                if (value) onSelected(option);
+              },
+              selectedColor: theme.colorScheme.primary,
+              labelStyle: theme.textTheme.bodyMedium?.copyWith(
+                color:
+                    isSelected ? Colors.white : theme.colorScheme.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 }
