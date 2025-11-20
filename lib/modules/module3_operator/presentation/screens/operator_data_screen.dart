@@ -903,7 +903,7 @@ bool _btEnableRequested = false;
     }
 
     final hc05 = devices.firstWhere(
-      (d) => (d.name ?? '').toUpperCase().contains('HC'),
+      (d) => (d.name ?? '').toUpperCase().contains('AEBT'),
       orElse: () => devices.first,
     );
 
