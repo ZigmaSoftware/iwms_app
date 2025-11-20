@@ -23,11 +23,19 @@ Dio createDioClient() {
 }
 
 class ApiConfig {
-  static const String driverLogin = 'http://zigma.in/iwms_app/iwms_app/login.php';
-  static const String citizenRegister =
-      'https://zigma.in/iwms_app/iwms_app/citizen_register.php';
+  static const String _legacyBase = 'https://zigma.in/iwms_app/iwms_app/';
+  static const String _localMobileBase = 'http://10.111.127.123:8000/api/mobile/';
+
+  static const String driverLogin = '${_legacyBase}login.php';
+  static const String citizenRegister = '${_legacyBase}citizen_register.php';
+
+  /// Django backend endpoint for citizen authentication.
+  static const String _defaultCitizenLogin = '${_localMobileBase}customer/login/';
   static const String citizenLogin =
-      'https://zigma.in/iwms_app/iwms_app/citizen_login.php';
+      String.fromEnvironment('CITIZEN_LOGIN_URL', defaultValue: _defaultCitizenLogin);
+
+  /// Default user type identifier expected by the Django login API.
+  static const String citizenUserType = 'citizen';
 }
 
 // Base URL (without query params)

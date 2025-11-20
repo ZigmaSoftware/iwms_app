@@ -58,20 +58,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     emit(const AuthStateLoading());
-    final trimmedName = (event.fullName ?? '').trim();
-    final displayName = trimmedName.isNotEmpty
-        ? trimmedName
-        : (event.phone?.trim().isNotEmpty == true
-            ? 'Citizen ${event.phone}'
-            : _demoCitizenName);
-    final user = UserModel(
-      userId: 'CUS-${displayName.replaceAll(' ', '').toUpperCase()}',
-      userName: displayName,
-      role: 'citizen',
-      authToken: 'demo-token-citizen',
-    );
-    await _authRepository.saveUser(user);
-    emit(AuthStateAuthenticatedCitizen(userName: user.userName));
+    try {
+      final user = await _authRepository.loginCitizen(
+        username: event.username,
+        password: event.password,
+        userType: event.userType,
+      );
+      await _authRepository.saveUser(user);
+      emit(AuthStateAuthenticatedCitizen(userName: user.userName));
+    } on AuthRepositoryException catch (error) {
+      emit(AuthStateFailure(message: error.message));
+      emit(const AuthStateUnauthenticated());
+    } catch (_) {
+      emit(const AuthStateFailure(message: 'Unable to login. Please try again.'));
+      emit(const AuthStateUnauthenticated());
+    }
   }
 
   Future<void> _onCitizenRegisterRequested(

@@ -1,8 +1,19 @@
 // lib/data/repositories/auth_repository.dart
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/data/models/user_model.dart';
+
+class AuthRepositoryException implements Exception {
+  final String message;
+
+  AuthRepositoryException(this.message);
+
+  @override
+  String toString() => message;
+}
 
 class AuthRepository {
   // ignore: unused_field
@@ -38,8 +49,70 @@ class AuthRepository {
   }) async =>
       throw UnimplementedError('Remote registration disabled in demo build.');
 
-  Future<UserModel> loginCitizen({required String phone}) async =>
-      throw UnimplementedError('Remote citizen login disabled in demo build.');
+  Future<UserModel> loginCitizen({
+    required String username,
+    required String password,
+    String? userType,
+  }) async {
+    final sanitizedUsername = username.trim();
+    if (sanitizedUsername.isEmpty) {
+      throw AuthRepositoryException('Please enter a valid phone number or username.');
+    }
+    if (password.isEmpty) {
+      throw AuthRepositoryException('Password is required.');
+    }
+
+    final resolvedUserType =
+        (userType?.trim().isNotEmpty ?? false) ? userType!.trim() : ApiConfig.citizenUserType;
+    try {
+      final response = await _dio.post(
+        ApiConfig.citizenLogin,
+        data: {
+          'user_type': resolvedUserType,
+          'username': sanitizedUsername,
+          'password': password,
+        },
+      );
+
+      final payload = response.data;
+      if (payload is! Map<String, dynamic>) {
+        throw AuthRepositoryException('Unexpected response from server.');
+      }
+
+      final success = payload['status'] == true;
+      if (!success) {
+        final message = _extractServerMessage(payload) ?? 'Unable to login with the provided details.';
+        throw AuthRepositoryException(message);
+      }
+
+      final token = payload['token']?.toString();
+      final userMap = payload['user'];
+      final userData = userMap is Map<String, dynamic> ? userMap : <String, dynamic>{};
+      final usernameFromApi = _stringOrNull(userData['username']) ?? sanitizedUsername;
+
+      final displayName = _buildDisplayName(
+        firstName: _stringOrNull(userData['first_name']),
+        lastName: _stringOrNull(userData['last_name']),
+        fallback: usernameFromApi,
+      );
+
+      return UserModel(
+        userId: usernameFromApi,
+        userName: displayName,
+        role: 'citizen',
+        authToken: token?.isNotEmpty == true ? token : null,
+      );
+    } on AuthRepositoryException {
+      rethrow;
+    } on DioException catch (dioError, stackTrace) {
+      final message = _handleDioError(dioError);
+      _logError('Citizen login failed', dioError, stackTrace);
+      throw AuthRepositoryException(message);
+    } catch (error, stackTrace) {
+      _logError('Unexpected citizen login failure', error, stackTrace);
+      throw AuthRepositoryException('Unexpected error occurred. Please try again.');
+    }
+  }
 
   Future<UserModel> loginDriver({
     required String userName,
@@ -85,5 +158,66 @@ class AuthRepository {
     } else {
       await _prefs.remove(_tokenKey);
     }
+  }
+
+  String? _extractServerMessage(dynamic data) {
+    if (data is Map<String, dynamic>) {
+      final message = data['message'];
+      if (message is String && message.trim().isNotEmpty) return message.trim();
+
+      final errors = data['errors'];
+      if (errors is Map) {
+        final buffer = StringBuffer();
+        errors.forEach((key, value) {
+          if (value is List && value.isNotEmpty) {
+            buffer.write('$key: ${value.first}. ');
+          } else if (value is String && value.isNotEmpty) {
+            buffer.write('$key: $value. ');
+          }
+        });
+        final compiled = buffer.toString().trim();
+        if (compiled.isNotEmpty) return compiled;
+      }
+
+      final detail = data['detail'];
+      if (detail is String && detail.trim().isNotEmpty) return detail.trim();
+    } else if (data is String && data.trim().isNotEmpty) {
+      return data.trim();
+    }
+    return null;
+  }
+
+  String _handleDioError(DioException error) {
+    final responseData = error.response?.data;
+    final serverMessage =
+        _extractServerMessage(responseData) ?? error.message ?? 'Unable to reach the server.';
+    return serverMessage;
+  }
+
+  String _buildDisplayName({
+    String? firstName,
+    String? lastName,
+    required String fallback,
+  }) {
+    final cleanedFirst = firstName?.trim() ?? '';
+    final cleanedLast = lastName?.trim() ?? '';
+    final fullName = '$cleanedFirst $cleanedLast'.trim();
+    return fullName.isNotEmpty ? fullName : fallback;
+  }
+
+  String? _stringOrNull(dynamic value) {
+    if (value is String) {
+      final trimmed = value.trim();
+      return trimmed.isNotEmpty ? trimmed : null;
+    }
+    if (value == null) return null;
+    final text = value.toString().trim();
+    return text.isNotEmpty ? text : null;
+  }
+
+  void _logError(String prefix, Object error, StackTrace stackTrace) {
+    if (!kDebugMode) return;
+    debugPrint('$prefix: $error');
+    debugPrint(stackTrace.toString());
   }
 }

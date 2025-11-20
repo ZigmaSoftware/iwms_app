@@ -15,21 +15,10 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  /// Placeholder credentials for the mock login flow. Replace when wiring auth.
-  static const String _mockPhoneNumber = '9998887776';
-  static const String _mockPassword = 'demo@1234';
-
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _rememberMe = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _phoneController.text = _mockPhoneNumber;
-    _passwordController.text = _mockPassword;
-  }
 
   @override
   void dispose() {
@@ -46,13 +35,18 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _handleLogin(BuildContext context) {
+    final isValid = _formKey.currentState?.validate() ?? false;
+    if (!isValid) {
+      _showSnack('Please enter a valid phone number and password.', Colors.red);
+      return;
+    }
     FocusScope.of(context).unfocus();
-    final phone = _phoneController.text.trim().isEmpty
-        ? _mockPhoneNumber
-        : _phoneController.text.trim();
+    final username = _phoneController.text.trim();
+    final password = _passwordController.text.trim();
     context.read<AuthBloc>().add(
           AuthCitizenLoginRequested(
-            phone: phone,
+            username: username,
+            password: password,
           ),
         );
   }
@@ -297,13 +291,13 @@ class _LoginCard extends StatelessWidget {
                       controller: phoneController,
                       keyboardType: TextInputType.phone,
                       decoration: inputDecorationBuilder(
-                        label: 'Phone Number',
-                        hint: 'Enter your phone number',
+                        label: 'Phone / Username',
+                        hint: 'Enter your registered phone or username',
                         icon: Icons.phone_outlined,
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return 'Please enter your phone number';
+                          return 'Please enter your registered phone or username';
                         }
                         return null;
                       },
@@ -318,10 +312,10 @@ class _LoginCard extends StatelessWidget {
                         icon: Icons.lock_outline,
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty) {
+                        if (value == null || value.trim().isEmpty) {
                           return 'Enter your password';
                         }
-                        if (value.length < 4) {
+                        if (value.trim().length < 4) {
                           return 'Password must be at least 4 characters';
                         }
                         return null;

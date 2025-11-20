@@ -9,16 +9,18 @@ abstract class AuthEvent extends Equatable {
 }
 
 class AuthCitizenLoginRequested extends AuthEvent {
-  final String? phone;
-  final String? fullName;
+  final String username;
+  final String password;
+  final String? userType;
 
   const AuthCitizenLoginRequested({
-    this.phone,
-    this.fullName,
+    required this.username,
+    required this.password,
+    this.userType,
   });
 
   @override
-  List<Object?> get props => [phone, fullName];
+  List<Object?> get props => [username, password, userType];
 }
 
 class AuthCitizenRegisterRequested extends AuthEvent {
