@@ -24,7 +24,8 @@ import 'package:iwms_citizen_app/modules/module1_citizen/citizen/personal_map.da
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/alloted_vehicle_map.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/grievance_chat.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_login_screen.dart';
-import 'package:iwms_citizen_app/modules/module4_admin/presentation/screens/admin_home_page.dart';
+import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/dashboard_screen.dart'
+    show DashboardScreen;
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/citizen_intro_slides.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/driver_home_page.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/driver_login_screen.dart';
@@ -147,7 +148,7 @@ class AppRouter {
       GoRoute(
         path: AppRoutePaths.adminHome,
         pageBuilder: (context, state) =>
-            _buildTransitionPage(state, const AdminHomePage()),
+            _buildTransitionPage(state, const DashboardScreen()),
       ),
       GoRoute(
         path: AppRoutePaths.citizenGrievanceChat,
