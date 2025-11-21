@@ -24,7 +24,9 @@ Dio createDioClient() {
 
 class ApiConfig {
   static const String _legacyBase = 'https://zigma.in/iwms_app/iwms_app/';
-  static const String _localMobileBase = 'http://192.168.4.75:8000/api/mobile/';
+  // static const String _localMobileBase = 'http://192.168.4.75:8000/api/mobile/';
+  static const String _localMobileBase = 'http://192.168.4.145:8000/api/mobile/';
+  // static const String _localMobileBase = 'http://10.111.127.123:8000/api/mobile/';
 
   static const String driverLogin = '${_legacyBase}login.php';
   static const String citizenRegister = '${_legacyBase}citizen_register.php';
