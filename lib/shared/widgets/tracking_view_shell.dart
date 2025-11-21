@@ -25,6 +25,14 @@ class TrackingHeroHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final bool hasBack = onBack != null;
+    final Widget backButton = hasBack
+        ? IconButton(
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                color: Colors.white),
+          )
+        : const SizedBox(width: 48, height: 48);
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -69,11 +77,7 @@ class TrackingHeroHeader extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  IconButton(
-                    onPressed: onBack,
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white),
-                  ),
+                  backButton,
                   Expanded(
                     child: Text(
                       contextLabel,
