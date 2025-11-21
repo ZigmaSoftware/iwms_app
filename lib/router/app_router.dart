@@ -24,6 +24,7 @@ import 'package:iwms_citizen_app/modules/module1_citizen/citizen/personal_map.da
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/alloted_vehicle_map.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/grievance_chat.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_login_screen.dart';
+import 'package:iwms_citizen_app/modules/module4_admin/presentation/screens/admin_home_page.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/citizen_intro_slides.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/driver_home_page.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/driver_login_screen.dart';
@@ -48,6 +49,7 @@ class AppRoutePaths {
   static const String citizenGrievanceChat = '/citizen/grievance-chat';
   static const String citizenProfile = '/citizen/profile';
   static const String operatorLogin = '/operator/login';
+  static const String adminHome = '/admin/home';
 }
 
 // --- The App Router ---
@@ -143,6 +145,11 @@ class AppRouter {
             _buildTransitionPage(state, const DriverHomePage()),
       ),
       GoRoute(
+        path: AppRoutePaths.adminHome,
+        pageBuilder: (context, state) =>
+            _buildTransitionPage(state, const AdminHomePage()),
+      ),
+      GoRoute(
         path: AppRoutePaths.citizenGrievanceChat,
         pageBuilder: (context, state) =>
             _buildTransitionPage(state, const GrievanceChatScreen()),
@@ -236,7 +243,8 @@ class AppRouter {
 
     router = GoRouter(
       routes: _routes,
-      initialLocation: AppRoutePaths.splash,
+      // Skip the splash screen to avoid startup crashes; land on role selection.
+      initialLocation: AppRoutePaths.selectUser,
       debugLogDiagnostics: true,
       redirect: _redirect,
       refreshListenable: refreshListenable,
@@ -263,18 +271,45 @@ class AppRouter {
         location == AppRoutePaths.selectUser ||
         location == AppRoutePaths.operatorLogin ||
         location == AppRoutePaths.driverLogin ||
-        location == AppRoutePaths.driverHome);
+        location == AppRoutePaths.driverHome ||
+        location == AppRoutePaths.adminHome);
 
     // 2. If user is authenticated
     if (authState is AuthStateAuthenticated) {
+      final role = authState.role;
       final onCitizenPublic =
           location == AppRoutePaths.citizenLogin || location == AppRoutePaths.citizenAuthIntro;
       final onCitizenIntro = location == AppRoutePaths.citizenIntroSlides ||
           location == AppRoutePaths.selectUser;
 
-      if (onSplash || onCitizenPublic || onCitizenIntro) {
-        return AppRoutePaths.citizenHome;
+      if (role == UserRole.citizen) {
+        if (onSplash || onCitizenPublic || onCitizenIntro) {
+          return AppRoutePaths.citizenHome;
+        }
+        return null;
       }
+
+      if (role == UserRole.operator) {
+        if (onSplash || onCitizenPublic || onCitizenIntro) {
+          return '/operator-home';
+        }
+        return null;
+      }
+
+      if (role == UserRole.driver) {
+        if (onSplash || onCitizenPublic || onCitizenIntro) {
+          return AppRoutePaths.driverHome;
+        }
+        return null;
+      }
+
+      if (role == UserRole.admin) {
+        if (onSplash || onCitizenPublic || onCitizenIntro) {
+          return AppRoutePaths.adminHome;
+        }
+        return null;
+      }
+
       return null;
     }
 
