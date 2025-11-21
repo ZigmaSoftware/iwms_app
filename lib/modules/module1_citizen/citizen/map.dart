@@ -21,11 +21,13 @@ import '../../../shared/widgets/tracking_view_shell.dart';
 class MapScreen extends StatefulWidget {
   final String? driverName;
   final String? vehicleNumber;
+  final bool showBackButton;
 
   const MapScreen({
     super.key,
     this.driverName,
     this.vehicleNumber,
+    this.showBackButton = true,
   });
 
   @override
@@ -279,13 +281,15 @@ class _MapScreenState extends State<MapScreen> {
                       statusPrimary: statusPrimary,
                       statusSecondary: statusSecondary,
                       statusContent: _buildHeaderFilterSection(context, state),
-                      onBack: () {
-                        if (context.canPop()) {
-                          context.pop();
-                        } else {
-                          context.go(AppRoutePaths.citizenHome);
-                        }
-                      },
+                      onBack: widget.showBackButton
+                          ? () {
+                              if (context.canPop()) {
+                                context.pop();
+                              } else {
+                                context.go(AppRoutePaths.citizenHome);
+                              }
+                            }
+                          : null,
                       onRefresh: () {
                         context
                             .read<VehicleBloc>()
