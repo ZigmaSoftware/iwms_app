@@ -87,7 +87,7 @@ class _WasteRadialBreakdownState extends State<WasteRadialBreakdown>
       if (oldItem.label != newItem.label ||
           oldItem.valueLabel != newItem.valueLabel ||
           oldItem.value != newItem.value ||
-          oldItem.color.value != newItem.color.value) {
+          oldItem.color != newItem.color) {
         return true;
       }
     }
@@ -96,60 +96,62 @@ class _WasteRadialBreakdownState extends State<WasteRadialBreakdown>
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final maxChartSize = math.min(screenWidth * 0.7, 280.0);
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
         final animationValue = Curves.easeOutCubic.transform(_controller.value);
-        return AspectRatio(
-          aspectRatio: 1,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final double size = math.min(
-                constraints.maxWidth,
-                constraints.maxHeight,
-              );
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: size,
-                    height: size,
-                    child: CustomPaint(
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final double size = math.min(
+              math.min(constraints.maxWidth, constraints.maxHeight),
+              maxChartSize,
+            );
+            return Center(
+              child: SizedBox(
+                width: size,
+                height: size,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    CustomPaint(
+                      size: Size.square(size),
                       painter: _RadialArcPainter(
                         items: widget.items,
                         totalValue: widget.totalValue,
                         animationValue: animationValue,
                       ),
                     ),
-                  ),
-                  Container(
-                    width: size * 0.42,
-                    height: size * 0.42,
-                    margin: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: widget.backgroundColor,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          blurRadius: 20,
-                          offset: const Offset(0, 6),
+                    Container(
+                      width: size * 0.4,
+                      height: size * 0.4,
+                      margin: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: widget.backgroundColor,
+                        shape: BoxShape.circle,
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color.fromRGBO(0, 0, 0, 0.04),
+                            blurRadius: 14,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.all(6),
+                      child: ClipOval(
+                        child: Image.asset(
+                          'assets/gif/dumpster.gif',
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
                         ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.all(6),
-                    child: ClipOval(
-                      child: Image.asset(
-                        'assets/gif/dumpster.gif',
-                        fit: BoxFit.cover,
-                        gaplessPlayback: true,
                       ),
                     ),
-                  ),
-                ],
-              );
-            },
-          ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );

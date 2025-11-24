@@ -2,15 +2,22 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:latlong2/latlong.dart';
 
 import 'package:iwms_citizen_app/core/di.dart';
 import 'package:iwms_citizen_app/data/models/vehicle_model.dart';
 import 'package:iwms_citizen_app/data/repositories/vehicle_repository.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/track/models/waste_reports.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/track/models/waste_summary.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/track/services/track_service.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
+import 'package:iwms_citizen_app/router/app_router.dart';
+
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/map.dart'
+    as citizen_map;
 
 const _primaryGreen = Color(0xFF2E7D32);
 const _softGreen = Color(0xFFA5D6A7);
@@ -67,9 +74,21 @@ class _DashboardShellState extends State<_DashboardShell> {
 
   Future<_DashboardData> _loadDashboardData() async {
     final today = DateTime.now();
-    final summaryMap = await _trackService.fetchMonthlySummaries(today);
     final todayKey = DateFormat('yyyy-MM-dd').format(today);
+    final fromDate = DateTime(today.year, today.month, 1);
 
+    final summaryFuture = _trackService.fetchMonthlySummaries(today);
+    final vehiclesFuture = _vehicleRepository.fetchAllVehicleLocations();
+    final dateRangeFuture = _trackService
+        .fetchDateWiseSummaries(fromDate, today)
+        .catchError((_) => <WasteSummary>[]);
+    final dayTicketsFuture =
+        _trackService.fetchDayWiseTickets(today).catchError((_) => <DayWiseTicket>[]);
+    final vehicleWeightsFuture = _trackService
+        .fetchVehicleWiseReport(today)
+        .catchError((_) => <VehicleWeightReport>[]);
+
+    final summaryMap = await summaryFuture;
     WasteSummary? summary;
     if (summaryMap.containsKey(todayKey)) {
       summary = summaryMap[todayKey];
@@ -77,8 +96,22 @@ class _DashboardShellState extends State<_DashboardShell> {
       summary = summaryMap.values.first;
     }
 
-    final vehicles = await _vehicleRepository.fetchAllVehicleLocations();
-    return _DashboardData(summary: summary, vehicles: vehicles);
+    final monthSeries = summaryMap.values.toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+
+    final vehicles = await vehiclesFuture;
+    final dateRangeSummaries = await dateRangeFuture;
+    final dayTickets = await dayTicketsFuture;
+    final vehicleWeights = await vehicleWeightsFuture;
+
+    return _DashboardData(
+      summary: summary,
+      vehicles: vehicles,
+      monthSeries: monthSeries,
+      dateRangeSummaries: dateRangeSummaries,
+      dayTickets: dayTickets,
+      vehicleWeights: vehicleWeights,
+    );
   }
 
   Future<void> _refreshHome() async {
@@ -96,7 +129,8 @@ class _DashboardShellState extends State<_DashboardShell> {
         index: _currentIndex,
         children: [
           _buildHome(context),
-          MapScreen(vehicleRepository: _vehicleRepository),
+          const AdminMapScreen(),
+          const _ApprovalsScreen(),
           VehiclesScreen(vehicleRepository: _vehicleRepository),
           const MoreScreen(),
         ],
@@ -172,12 +206,22 @@ class _DashboardHomeContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final summary = data.summary;
+    final monthSeries = data.monthSeries;
+    final dayTickets = data.dayTickets;
+    final vehicleWeights = data.vehicleWeights;
+    final rangeSummaries = data.dateRangeSummaries;
     final wasteSlices = [
       _WasteSlice('Wet Waste', summary?.wetWeight ?? 0, _primaryGreen),
       _WasteSlice('Dry Waste', summary?.dryWeight ?? 0, const Color(0xFF2979FF)),
       _WasteSlice('Mixed Waste', summary?.mixWeight ?? 0, const Color(0xFFFFB74D)),
     ];
     final statusCounts = data.statusCounts;
+    final pendingApprovals = _mockApprovalRequests
+        .where((r) => r.status == _ApprovalStatus.pending)
+        .length;
+    final acceptedApprovals = _mockApprovalRequests
+        .where((r) => r.status == _ApprovalStatus.approved)
+        .length;
 
     return Column(
       children: [
@@ -197,6 +241,11 @@ class _DashboardHomeContent extends StatelessWidget {
               child: Column(
                 children: [
                   _DailyWasteCard(summary: summary, slices: wasteSlices),
+                  const SizedBox(height: 12),
+                  _NotificationsCard(
+                    pendingApprovals: pendingApprovals,
+                    acceptedApprovals: acceptedApprovals,
+                  ),
                   const SizedBox(height: 16),
                   _AttendanceRow(
                     statusCounts: statusCounts,
@@ -208,6 +257,18 @@ class _DashboardHomeContent extends StatelessWidget {
                     statusCounts: statusCounts,
                     summary: summary,
                   ),
+                  if (monthSeries.isNotEmpty ||
+                      vehicleWeights.isNotEmpty ||
+                      dayTickets.isNotEmpty)
+                    ...[
+                      const SizedBox(height: 16),
+                      _WeighbridgeInsights(
+                        monthSeries: monthSeries,
+                        rangeSummaries: rangeSummaries,
+                        dayTickets: dayTickets,
+                        vehicleWeights: vehicleWeights,
+                      ),
+                    ],
                 ],
               ),
             ),
@@ -232,7 +293,12 @@ class _HeaderHero extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFFDFF3DD), Color(0xFFFFFFFF)],
+          colors: [Color(0xCCFFFFFF), Color(0x99FFFFFF)],
+        ),
+        image: DecorationImage(
+          image: AssetImage('assets/images/admin_header.png'),
+          fit: BoxFit.cover,
+          alignment: Alignment.centerRight,
         ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -264,24 +330,12 @@ class _HeaderHero extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
-                    color: _primaryGreen,
+                    color: Color.fromARGB(255, 255, 255, 255),
                   ),
                 ),
               ],
             ),
           ),
-          SizedBox(
-            width: math.min(140, maxWidth * 0.35),
-            child: Image.asset(
-              'asset/images/vehicle.png',
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const Icon(
-                Icons.local_shipping,
-                size: 72,
-                color: _primaryGreen,
-              ),
-            ),
-          )
         ],
       ),
     );
@@ -387,53 +441,66 @@ class _DailyWasteCard extends StatelessWidget {
                   ],
                 ),
               );
-              final legend = Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: slices
-                      .map(
-                        (slice) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 12,
-                                height: 12,
-                                decoration: BoxDecoration(
-                                  color: slice.color,
-                                  shape: BoxShape.circle,
-                                ),
+              final legendContent = Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: slices
+                    .map(
+                      (slice) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: slice.color,
+                                shape: BoxShape.circle,
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  slice.label,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                '${slice.value.toStringAsFixed(1)} t',
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                slice.label,
                                 style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
+                                  fontWeight: FontWeight.w600,
                                   fontSize: 14,
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                            Text(
+                              '${slice.value.toStringAsFixed(1)} t',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
                         ),
-                      )
-                      .toList(),
-                ),
+                      ),
+                    )
+                    .toList(),
               );
 
               return isNarrow
-                  ? Column(children: [chart, const SizedBox(height: 14), legend])
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        chart,
+                        const SizedBox(height: 14),
+                        legendContent,
+                      ],
+                    )
                   : Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [chart, const SizedBox(width: 16), legend],
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        chart,
+                        const SizedBox(width: 16),
+                        Flexible(
+                          fit: FlexFit.loose,
+                          child: legendContent,
+                        ),
+                      ],
                     );
             },
           ),
@@ -448,6 +515,127 @@ class _DailyWasteCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _NotificationsCard extends StatelessWidget {
+  const _NotificationsCard(
+      {required this.pendingApprovals, required this.acceptedApprovals});
+
+  final int pendingApprovals;
+  final int acceptedApprovals;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: _cardDecoration(color: _softBlue.withValues(alpha: 0.35)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: _softCardShadow(),
+                ),
+                child: const Icon(Icons.notifications_active,
+                    color: _primaryGreen),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      'Approval notifications',
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: _primaryGreen),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Review leave requests from drivers and operators.',
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: _iconGray,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _NotificationChip(
+                label: 'Pending',
+                value: pendingApprovals,
+                color: const Color(0xFFF9A825),
+              ),
+              const SizedBox(width: 10),
+              _NotificationChip(
+                label: 'Accepted',
+                value: acceptedApprovals,
+                color: _primaryGreen,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NotificationChip extends StatelessWidget {
+  const _NotificationChip(
+      {required this.label, required this.value, required this.color});
+
+  final String label;
+  final int value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                    fontWeight: FontWeight.w700, color: color, fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Text(
+              '$value',
+              style: TextStyle(
+                  fontWeight: FontWeight.w800, color: color, fontSize: 16),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -501,7 +689,7 @@ class _AttendanceRow extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(
           child: _AttendanceTile(
-            label: 'On Leave',
+            label: 'Leave',
             count: onLeave,
             background: const Color(0xFFE3F2FD),
             textColor: const Color(0xFF1565C0),
@@ -567,34 +755,10 @@ class _ActivityAndVehicleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final stacked = constraints.maxWidth < 720;
-        final recent = _RecentActivityCard(
-          entries: _buildActivityEntries(vehicles, summary, statusCounts),
-        );
-        final vehicleStatus = _VehicleStatusCard(
-          vehicles: vehicles,
-          statusCounts: statusCounts,
-        );
-        if (stacked) {
-          return Column(
-            children: [
-              recent,
-              const SizedBox(height: 12),
-              vehicleStatus,
-            ],
-          );
-        }
-        return Row(
-          children: [
-            Expanded(child: recent),
-            const SizedBox(width: 12),
-            Expanded(child: vehicleStatus),
-          ],
-        );
-      },
+    final recent = _RecentActivityCard(
+      entries: _buildActivityEntries(vehicles, summary, statusCounts),
     );
+    return recent;
   }
 
   List<_ActivityEntry> _buildActivityEntries(
@@ -625,6 +789,222 @@ class _ActivityAndVehicleRow extends StatelessWidget {
         lastUpdate != null ? ActivityTone.success : ActivityTone.warning,
       ),
     ];
+  }
+}
+
+class _WeighbridgeInsights extends StatelessWidget {
+  const _WeighbridgeInsights({
+    required this.monthSeries,
+    required this.rangeSummaries,
+    required this.dayTickets,
+    required this.vehicleWeights,
+  });
+
+  final List<WasteSummary> monthSeries;
+  final List<WasteSummary> rangeSummaries;
+  final List<DayWiseTicket> dayTickets;
+  final List<VehicleWeightReport> vehicleWeights;
+
+  @override
+  Widget build(BuildContext context) {
+    final NumberFormat weightFormat = NumberFormat.decimalPattern();
+    final totalsSource =
+        rangeSummaries.isNotEmpty ? rangeSummaries : monthSeries;
+    final double mtdNet = totalsSource.fold<double>(
+        0, (sum, item) => sum + item.totalNetWeight);
+    final int mtdTrips =
+        totalsSource.fold<int>(0, (sum, item) => sum + item.totalTrip);
+
+    final topVehicles = List<VehicleWeightReport>.from(vehicleWeights)
+      ..sort((a, b) => b.totalWeight.compareTo(a.totalWeight));
+    final latestTickets = dayTickets.take(3).toList();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Weighbridge Insights',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Powered by month/day/vehicle reports',
+            style: TextStyle(color: _iconGray, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildMetric(
+                icon: Icons.scale_outlined,
+                label: 'Net collected',
+                value: '${weightFormat.format(mtdNet)} kg',
+              ),
+              _buildMetric(
+                icon: Icons.route_outlined,
+                label: 'Trips',
+                value: mtdTrips.toString(),
+              ),
+              if (latestTickets.isNotEmpty)
+                _buildMetric(
+                  icon: Icons.receipt_long,
+                  label: 'Tickets today',
+                  value: latestTickets.length.toString(),
+                ),
+            ],
+          ),
+          if (topVehicles.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              'Top vehicles (weight)',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyLarge
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            ...topVehicles.take(3).map(
+              (v) => _insightRow(
+                icon: Icons.local_shipping,
+                leading: v.vehicleNo,
+                trailing: '${weightFormat.format(v.totalWeight)} kg',
+              ),
+            ),
+          ],
+          if (latestTickets.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              'Latest weighbridge tickets',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyLarge
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            ...latestTickets.map(
+              (t) => _insightRow(
+                icon: Icons.receipt_long,
+                leading: 'Ticket ${t.ticketNo}',
+                trailing: '${weightFormat.format(t.netWeight)} kg',
+                subtitle: t.vehicleNo,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetric({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: _bgWhite,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _borderGray),
+        boxShadow: _softCardShadow(),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: _primaryGreen, size: 18),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: _iconGray,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _insightRow({
+    required IconData icon,
+    required String leading,
+    required String trailing,
+    String? subtitle,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: _bgWhite,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _borderGray),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _softGreen.withValues(alpha: 0.35),
+            ),
+            child: Icon(icon, color: _primaryGreen, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  leading,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+                if (subtitle != null)
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: _iconGray,
+                      fontSize: 12,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Text(
+            trailing,
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              color: _primaryGreen,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -722,12 +1102,12 @@ class _VehicleStatusCard extends StatelessWidget {
     final highlighted =
         vehicles.isNotEmpty ? vehicles.firstWhere((_) => true) : null;
     return Container(
-      height: 200,
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: _cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             'Vehicle Status',
@@ -854,6 +1234,10 @@ class _DashboardNavBar extends StatelessWidget {
           label: 'Map',
         ),
         BottomNavigationBarItem(
+          icon: Icon(Icons.fact_check_outlined),
+          label: 'Approvals',
+        ),
+        BottomNavigationBarItem(
           icon: Icon(Icons.directions_bus_outlined),
           label: 'Vehicles',
         ),
@@ -869,499 +1253,14 @@ class _DashboardNavBar extends StatelessWidget {
 // MAP SCREEN
 // ---------------------------------------------------------------------------
 
-class MapScreen extends StatefulWidget {
-  const MapScreen({super.key, required this.vehicleRepository});
-
-  final VehicleRepository vehicleRepository;
-
-  @override
-  State<MapScreen> createState() => _MapScreenState();
-}
-
-class _MapScreenState extends State<MapScreen> {
-  final MapController _mapController = MapController();
-  List<VehicleModel> _vehicles = const [];
-  bool _loading = true;
-  Object? _error;
-  Timer? _poller;
-  String _search = '';
-
-  final _countries = const ['India', 'UAE'];
-  final _states = const ['Delhi', 'Karnataka', 'Uttar Pradesh'];
-  final _cities = const ['Delhi', 'Bangalore', 'Noida'];
-  final _zones = const ['Zone 1', 'Zone 2', 'Zone 3'];
-
-  String _selectedCountry = 'India';
-  String _selectedState = 'Delhi';
-  String _selectedCity = 'Delhi';
-  String _selectedZone = 'Zone 1';
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchVehicles();
-    _poller =
-        Timer.periodic(const Duration(seconds: 25), (_) => _fetchVehicles(silent: true));
-  }
-
-  @override
-  void dispose() {
-    _poller?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _fetchVehicles({bool silent = false}) async {
-    if (!silent) {
-      setState(() {
-        _loading = true;
-        _error = null;
-      });
-    }
-    try {
-      final result = await widget.vehicleRepository.fetchAllVehicleLocations();
-      if (!mounted) return;
-      setState(() {
-        _vehicles = result;
-        _loading = false;
-      });
-      _fitBounds(result);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e;
-        _loading = false;
-      });
-    }
-  }
-
-  void _fitBounds(List<VehicleModel> vehicles) {
-    if (vehicles.isEmpty) return;
-    final bounds = LatLngBounds.fromPoints(
-      vehicles
-          .map((v) => LatLng(v.latitude, v.longitude))
-          .toList(growable: false),
-    );
-    _mapController.fitCamera(
-      CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(36)),
-    );
-  }
-
-  LatLng get _defaultCenter => _vehicles.isNotEmpty
-      ? LatLng(_vehicles.first.latitude, _vehicles.first.longitude)
-      : const LatLng(28.6139, 77.2090);
-
-  Map<_VehicleState, int> get _statusCounts =>
-      _DashboardData.countByStatus(_vehicles);
-
-  List<VehicleModel> get _filteredVehicles {
-    if (_search.isEmpty) return _vehicles;
-    final query = _search.toLowerCase();
-    return _vehicles
-        .where((v) =>
-            (v.registrationNumber ?? '').toLowerCase().contains(query) ||
-            (v.driverName ?? '').toLowerCase().contains(query))
-        .toList(growable: false);
-  }
+class AdminMapScreen extends StatelessWidget {
+  const AdminMapScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: RefreshIndicator(
-        onRefresh: _fetchVehicles,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final mapHeight =
-                (constraints.maxHeight * 0.55).clamp(280.0, 520.0).toDouble();
-            return SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const _SectionHeader(
-                    title: 'Live Map',
-                    subtitle: 'Realtime coordinates from the tracking API',
-                  ),
-                  const SizedBox(height: 14),
-                  _SearchField(
-                    hint: 'Search vehicle or driver',
-                    onChanged: (value) => setState(() => _search = value),
-                  ),
-                  const SizedBox(height: 12),
-                  Stack(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(18),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            boxShadow: _softCardShadow(),
-                          ),
-                          height: mapHeight,
-                          width: double.infinity,
-                          child: _loading
-                              ? const Center(child: CircularProgressIndicator())
-                              : _error != null
-                                  ? Center(
-                                      child: Text(
-                                        'Unable to load map data',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium,
-                                      ),
-                                    )
-                                  : FlutterMap(
-                                      mapController: _mapController,
-                                      options: MapOptions(
-                                        initialCenter: _defaultCenter,
-                                        initialZoom: 12,
-                                        maxZoom: 18,
-                                        minZoom: 3,
-                                      ),
-                                      children: [
-                                        TileLayer(
-                                          urlTemplate:
-                                              'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                          subdomains: const ['a', 'b', 'c'],
-                                          userAgentPackageName:
-                                              'com.iwms.app',
-                                          retinaMode: true,
-                                        ),
-                                        MarkerLayer(
-                                          markers: _filteredVehicles
-                                              .map(
-                                                (vehicle) => Marker(
-                                                  point: LatLng(vehicle.latitude,
-                                                      vehicle.longitude),
-                                                  width: 42,
-                                                  height: 42,
-                                                  child: _VehicleMarker(
-                                                    vehicle: vehicle,
-                                                  ),
-                                                ),
-                                              )
-                                              .toList(),
-                                        ),
-                                      ],
-                                    ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 14,
-                        right: 14,
-                        child: Material(
-                          color: Colors.white,
-                          shape: const CircleBorder(),
-                          elevation: 6,
-                          shadowColor: Colors.black.withValues(alpha: 0.08),
-                          child: IconButton(
-                            icon: const Icon(Icons.my_location,
-                                color: _primaryGreen),
-                            onPressed: () =>
-                                _mapController.move(_defaultCenter, 14),
-                          ),
-                        ),
-                      )
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _RegionFilters(
-                    countries: _countries,
-                    states: _states,
-                    cities: _cities,
-                    zones: _zones,
-                    selectedCountry: _selectedCountry,
-                    selectedState: _selectedState,
-                    selectedCity: _selectedCity,
-                    selectedZone: _selectedZone,
-                    onChanged: (country, state, city, zone) {
-                      setState(() {
-                        _selectedCountry = country;
-                        _selectedState = state;
-                        _selectedCity = city;
-                        _selectedZone = zone;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _StatusPillsRow(counts: _statusCounts),
-                  const SizedBox(height: 12),
-                  _VehiclePreviewList(vehicles: _filteredVehicles),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _VehicleMarker extends StatelessWidget {
-  const _VehicleMarker({required this.vehicle});
-
-  final VehicleModel vehicle;
-
-  @override
-  Widget build(BuildContext context) {
-    final state = _vehicleStateFor(vehicle);
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        boxShadow: _softCardShadow(),
-      ),
-      child: Center(
-        child: Icon(
-          Icons.local_shipping,
-          size: 22,
-          color: _vehicleStateColor(state),
-        ),
-      ),
-    );
-  }
-}
-
-class _RegionFilters extends StatelessWidget {
-  const _RegionFilters({
-    required this.countries,
-    required this.states,
-    required this.cities,
-    required this.zones,
-    required this.selectedCountry,
-    required this.selectedState,
-    required this.selectedCity,
-    required this.selectedZone,
-    required this.onChanged,
-  });
-
-  final List<String> countries;
-  final List<String> states;
-  final List<String> cities;
-  final List<String> zones;
-  final String selectedCountry;
-  final String selectedState;
-  final String selectedCity;
-  final String selectedZone;
-  final void Function(String, String, String, String) onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, constraints) {
-      final isTight = constraints.maxWidth < 420;
-      final fieldWidth = isTight ? double.infinity : (constraints.maxWidth / 2) - 8;
-      return Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        children: [
-          SizedBox(
-            width: fieldWidth,
-            child: _RoundedDropdown(
-              value: selectedCountry,
-              items: countries,
-              label: 'Country',
-              onChanged: (value) => onChanged(
-                value ?? selectedCountry,
-                selectedState,
-                selectedCity,
-                selectedZone,
-              ),
-            ),
-          ),
-          SizedBox(
-            width: fieldWidth,
-            child: _RoundedDropdown(
-              value: selectedState,
-              items: states,
-              label: 'State',
-              onChanged: (value) => onChanged(
-                selectedCountry,
-                value ?? selectedState,
-                selectedCity,
-                selectedZone,
-              ),
-            ),
-          ),
-          SizedBox(
-            width: fieldWidth,
-            child: _RoundedDropdown(
-              value: selectedCity,
-              items: cities,
-              label: 'City',
-              onChanged: (value) => onChanged(
-                selectedCountry,
-                selectedState,
-                value ?? selectedCity,
-                selectedZone,
-              ),
-            ),
-          ),
-          SizedBox(
-            width: fieldWidth,
-            child: _RoundedDropdown(
-              value: selectedZone,
-              items: zones,
-              label: 'Zone',
-              onChanged: (value) => onChanged(
-                selectedCountry,
-                selectedState,
-                selectedCity,
-                value ?? selectedZone,
-              ),
-            ),
-          ),
-        ],
-      );
-    });
-  }
-}
-
-class _RoundedDropdown extends StatelessWidget {
-  const _RoundedDropdown({
-    required this.value,
-    required this.items,
-    required this.label,
-    required this.onChanged,
-  });
-
-  final String value;
-  final List<String> items;
-  final String label;
-  final ValueChanged<String?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _borderGray),
-        boxShadow: _softCardShadow(),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: _iconGray,
-            ),
-          ),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              isExpanded: true,
-              value: value,
-              style: const TextStyle(fontSize: 14, color: Colors.black87),
-              icon: const Icon(Icons.keyboard_arrow_down),
-              borderRadius: BorderRadius.circular(16),
-              onChanged: onChanged,
-              items: items
-                  .map(
-                    (item) => DropdownMenuItem(
-                      value: item,
-                      child: Text(item),
-                    ),
-                  )
-                  .toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusPillsRow extends StatelessWidget {
-  const _StatusPillsRow({required this.counts});
-
-  final Map<_VehicleState, int> counts;
-
-  @override
-  Widget build(BuildContext context) {
-    final pills = [
-      _StatusPill(state: _VehicleState.running, count: counts[_VehicleState.running] ?? 0),
-      _StatusPill(state: _VehicleState.idle, count: counts[_VehicleState.idle] ?? 0),
-      _StatusPill(state: _VehicleState.parked, count: counts[_VehicleState.parked] ?? 0),
-      _StatusPill(state: _VehicleState.nodata, count: counts[_VehicleState.nodata] ?? 0),
-    ];
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: pills,
-    );
-  }
-}
-
-class _VehiclePreviewList extends StatelessWidget {
-  const _VehiclePreviewList({required this.vehicles});
-
-  final List<VehicleModel> vehicles;
-
-  @override
-  Widget build(BuildContext context) {
-    if (vehicles.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: _cardDecoration(color: _bgWhite),
-        child: const Text(
-          'No vehicles found for the current filters.',
-          style: TextStyle(color: _iconGray),
-        ),
-      );
-    }
-    final preview = vehicles.take(3).toList();
-    return Column(
-      children: preview
-          .map(
-            (v) => Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(14),
-              decoration: _cardDecoration(color: _bgWhite),
-              child: Row(
-                children: [
-                  Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: _softBlue.withValues(alpha: 0.4),
-            ),
-            child:
-                const Icon(Icons.directions_bus, color: _primaryGreen),
-          ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          v.registrationNumber ?? 'Vehicle ${v.id}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                          ),
-                        ),
-                        Text(
-                          v.driverName ?? 'Driver not assigned',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: _iconGray,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _StatusPill(state: _vehicleStateFor(v)),
-                ],
-              ),
-            ),
-          )
-          .toList(),
+    // Reuse the production map experience (live vehicles, polygons, filters).
+    return const citizen_map.MapScreen(
+      showBackButton: false,
     );
   }
 }
@@ -1383,6 +1282,7 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
   bool _loading = true;
   Object? _error;
   Timer? _poller;
+  bool _showList = false;
 
   @override
   void initState() {
@@ -1437,27 +1337,46 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                           style: TextStyle(color: _iconGray)),
                     ],
                   )
-                : ListView.builder(
+                : ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-                    itemCount: _vehicles.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const _SectionHeader(
-                              title: 'Vehicles',
-                              subtitle:
-                                  'Live feed from vehicle tracking API',
+                    children: [
+                      const _SectionHeader(
+                        title: 'Vehicles',
+                        subtitle: 'Live feed from vehicle tracking API',
+                      ),
+                      const SizedBox(height: 12),
+                      _VehicleStatusCard(
+                        vehicles: _vehicles,
+                        statusCounts:
+                            _DashboardData.countByStatus(_vehicles),
+                      ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: ElevatedButton.icon(
+                          icon: Icon(
+                            _showList
+                                ? Icons.list_alt
+                                : Icons.directions_bus,
+                          ),
+                          label: Text(_showList ? 'Hide vehicles' : 'All vehicles'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _primaryGreen,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            const SizedBox(height: 12),
-                          ],
-                        );
-                      }
-                      final vehicle = _vehicles[index - 1];
-                      return _VehicleTile(vehicle: vehicle);
-                    },
+                          ),
+                          onPressed: () =>
+                              setState(() => _showList = !_showList),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (_showList)
+                        ..._vehicles
+                            .map((vehicle) => _VehicleTile(vehicle: vehicle)),
+                    ],
                   ),
       ),
     );
@@ -1523,6 +1442,218 @@ class _VehicleTile extends StatelessWidget {
   }
 }
 
+class _ApprovalRequest {
+  const _ApprovalRequest({
+    required this.title,
+    required this.subtitle,
+    required this.status,
+    required this.dateLabel,
+  });
+
+  final String title;
+  final String subtitle;
+  final _ApprovalStatus status;
+  final String dateLabel;
+
+  Color get color {
+    switch (status) {
+      case _ApprovalStatus.pending:
+        return const Color(0xFFF9A825);
+      case _ApprovalStatus.approved:
+        return _primaryGreen;
+      case _ApprovalStatus.rejected:
+        return const Color(0xFFB71C1C);
+    }
+  }
+
+  IconData get icon {
+    switch (status) {
+      case _ApprovalStatus.pending:
+        return Icons.schedule_outlined;
+      case _ApprovalStatus.approved:
+        return Icons.check_circle_outline;
+      case _ApprovalStatus.rejected:
+        return Icons.highlight_off_outlined;
+    }
+  }
+
+  String get statusLabel {
+    switch (status) {
+      case _ApprovalStatus.pending:
+        return 'Pending';
+      case _ApprovalStatus.approved:
+        return 'Approved';
+      case _ApprovalStatus.rejected:
+        return 'Rejected';
+    }
+  }
+}
+
+enum _ApprovalStatus { pending, approved, rejected }
+
+const _mockApprovalRequests = <_ApprovalRequest>[
+  _ApprovalRequest(
+      title: 'Driver | Arun Menon',
+      subtitle: 'Annual leave - 3 days - requested by driver',
+      status: _ApprovalStatus.pending,
+      dateLabel: 'Dec 12, 2025'),
+  _ApprovalRequest(
+      title: 'Operator | Lata Fernandes',
+      subtitle: 'Sick leave - 1 day - requested by operator',
+      status: _ApprovalStatus.approved,
+      dateLabel: 'Dec 10, 2025'),
+  _ApprovalRequest(
+      title: 'Driver | Naveen Pillai',
+      subtitle: 'Shift swap fallback - requested by driver',
+      status: _ApprovalStatus.rejected,
+      dateLabel: 'Dec 08, 2025'),
+];
+
+// ---------------------------------------------------------------------------
+// APPROVALS SCREEN
+// ---------------------------------------------------------------------------
+
+class _ApprovalsScreen extends StatelessWidget {
+  const _ApprovalsScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final pendingCount = _mockApprovalRequests
+        .where((r) => r.status == _ApprovalStatus.pending)
+        .length;
+    final acceptedCount = _mockApprovalRequests
+        .where((r) => r.status == _ApprovalStatus.approved)
+        .length;
+    final driverCount = _mockApprovalRequests
+        .where((r) => r.title.toLowerCase().contains('driver'))
+        .length;
+    final operatorCount = _mockApprovalRequests
+        .where((r) => r.title.toLowerCase().contains('operator'))
+        .length;
+
+    final tiles = [
+      _ApprovalGridTile(
+          title: 'Driver',
+          count: driverCount,
+          color: _primaryGreen,
+          icon: Icons.local_shipping_outlined),
+      _ApprovalGridTile(
+          title: 'Operator',
+          count: operatorCount,
+          color: const Color(0xFF1565C0),
+          icon: Icons.support_agent),
+      _ApprovalGridTile(
+          title: 'Pending',
+          count: pendingCount,
+          color: const Color(0xFFF9A825),
+          icon: Icons.schedule_outlined),
+      _ApprovalGridTile(
+          title: 'Accepted',
+          count: acceptedCount,
+          color: const Color(0xFF2E7D32),
+          icon: Icons.check_circle_outline),
+    ];
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _SectionHeader(
+              title: 'Approvals',
+              subtitle: 'Leave approvals from drivers and operators',
+            ),
+            const SizedBox(height: 12),
+            LayoutBuilder(builder: (context, constraints) {
+              const spacing = 12.0;
+              final width = constraints.maxWidth;
+              const columns = 2;
+              final tileWidth =
+                  (width - spacing * (columns - 1)) / columns;
+
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: tiles
+                    .map(
+                      (tile) => ConstrainedBox(
+                        constraints: BoxConstraints(
+                            minWidth: tileWidth, maxWidth: tileWidth),
+                        child: tile,
+                      ),
+                    )
+                    .toList(),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ApprovalGridTile extends StatelessWidget {
+  const _ApprovalGridTile(
+      {required this.title,
+      required this.count,
+      required this.color,
+      required this.icon});
+
+  final String title;
+  final int count;
+  final Color color;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.16),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$count',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: _iconGray),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // MORE SCREEN
 // ---------------------------------------------------------------------------
@@ -1532,12 +1663,22 @@ class MoreScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const items = <_MoreItem>[
+    final items = <_MoreItem>[
       _MoreItem(Icons.person_outline, 'Profile'),
       _MoreItem(Icons.notifications_none, 'Notifications'),
       _MoreItem(Icons.settings_outlined, 'Settings'),
       _MoreItem(Icons.support_agent, 'Support'),
-      _MoreItem(Icons.logout, 'Logout'),
+      _MoreItem(Icons.insert_chart_outlined, 'Weighbridge reports'),
+      _MoreItem(Icons.map_outlined, 'Manage sites & geofences'),
+      _MoreItem(Icons.security, 'Admin controls'),
+      _MoreItem(
+        Icons.logout,
+        'Logout',
+        onTap: () {
+          context.read<AuthBloc>().add(AuthLogoutRequested());
+          context.go(AppRoutePaths.selectUser);
+        },
+      ),
     ];
     return SafeArea(
       child: SingleChildScrollView(
@@ -1551,25 +1692,29 @@ class MoreScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             ...items.map(
-              (item) => Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(18),
-                decoration: _cardDecoration(),
-                child: Row(
-                  children: [
-                    Icon(item.icon, color: _primaryGreen),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        item.label,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
+              (item) => InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: item.onTap,
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(18),
+                  decoration: _cardDecoration(),
+                  child: Row(
+                    children: [
+                      Icon(item.icon, color: _primaryGreen),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          item.label,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
                         ),
                       ),
-                    ),
-                    const Icon(Icons.chevron_right, color: _iconGray),
-                  ],
+                      const Icon(Icons.chevron_right, color: _iconGray),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1581,21 +1726,33 @@ class MoreScreen extends StatelessWidget {
 }
 
 class _MoreItem {
-  const _MoreItem(this.icon, this.label);
+  const _MoreItem(this.icon, this.label, {this.onTap});
   final IconData icon;
   final String label;
+  final VoidCallback? onTap;
 }
 // ---------------------------------------------------------------------------
 // HELPERS & MODELS
 // ---------------------------------------------------------------------------
 
 class _DashboardData {
-  const _DashboardData({this.summary, this.vehicles = const []});
+  const _DashboardData({
+    this.summary,
+    this.vehicles = const [],
+    this.monthSeries = const [],
+    this.dateRangeSummaries = const [],
+    this.dayTickets = const [],
+    this.vehicleWeights = const [],
+  });
 
   const _DashboardData.empty() : this();
 
   final WasteSummary? summary;
   final List<VehicleModel> vehicles;
+  final List<WasteSummary> monthSeries;
+  final List<WasteSummary> dateRangeSummaries;
+  final List<DayWiseTicket> dayTickets;
+  final List<VehicleWeightReport> vehicleWeights;
 
   Map<_VehicleState, int> get statusCounts => countByStatus(vehicles);
 
@@ -1696,10 +1853,9 @@ Color _vehicleStateColor(_VehicleState state) {
 }
 
 class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.state, this.count});
+  const _StatusPill({required this.state});
 
   final _VehicleState state;
-  final int? count;
 
   String get _label {
     switch (state) {
@@ -1735,7 +1891,7 @@ class _StatusPill extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Text(
-            count != null ? '$_label (${count!})' : _label,
+            _label,
             style: TextStyle(
               color: _vehicleStateColor(state),
               fontWeight: FontWeight.w700,
@@ -1791,33 +1947,6 @@ class _SectionHeader extends StatelessWidget {
               ?.copyWith(color: _iconGray),
         ),
       ],
-    );
-  }
-}
-
-class _SearchField extends StatelessWidget {
-  const _SearchField({required this.hint, required this.onChanged});
-
-  final String hint;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: _bgWhite,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: _softCardShadow(),
-      ),
-      child: TextField(
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          border: InputBorder.none,
-          hintText: hint,
-          icon: const Icon(Icons.search, color: _iconGray),
-        ),
-      ),
     );
   }
 }

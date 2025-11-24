@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -28,24 +30,27 @@ class WasteStatCard extends StatelessWidget {
     final theme = Theme.of(context);
     final surface = theme.colorScheme.surface;
     final borderRadius = BorderRadius.circular(DashboardThemeTokens.radiusXL);
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final double cardHeight = math.min(screenHeight * 0.18, 180);
+
     return SizedBox(
-      height: 180,
+      height: cardHeight,
       child: AnimatedContainer(
         duration: DashboardThemeTokens.animationNormal,
-        curve: Curves.fastEaseInToSlowEaseOut,
+        curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
           borderRadius: borderRadius,
           border: Border.all(
             color: isSelected
-                ? accentColor
-                : accentColor.withValues(alpha: 0.25),
+                ? accentColor.withValues(alpha: 0.6)
+                : Colors.black.withValues(alpha: 0.08),
             width: isSelected ? 2 : 1,
           ),
-          boxShadow: [
+          boxShadow: const [
             BoxShadow(
-              color: accentColor.withValues(alpha: isSelected ? 0.3 : 0.18),
-              blurRadius: isSelected ? 26 : 20,
-              offset: const Offset(0, 14),
+              color: Color.fromRGBO(0, 0, 0, 0.04),
+              blurRadius: 14,
+              offset: Offset(0, 4),
             ),
           ],
         ),
@@ -68,7 +73,7 @@ class WasteStatCard extends StatelessWidget {
                           fit: BoxFit.cover,
                           colorFilter: isSelected
                               ? ColorFilter.mode(
-                                  Colors.black.withValues(alpha: 0.12),
+                                  Colors.black.withValues(alpha: 0.1),
                                   BlendMode.darken,
                                 )
                               : null,
@@ -79,16 +84,14 @@ class WasteStatCard extends StatelessWidget {
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: DashboardThemeTokens.spacing12,
-                      vertical: DashboardThemeTokens.spacing10,
+                      horizontal: 16,
+                      vertical: 14,
                     ),
                     decoration: BoxDecoration(
                       color: surface,
                       borderRadius: const BorderRadius.only(
-                        bottomLeft:
-                            Radius.circular(DashboardThemeTokens.radiusXL),
-                        bottomRight:
-                            Radius.circular(DashboardThemeTokens.radiusXL),
+                        bottomLeft: Radius.circular(22),
+                        bottomRight: Radius.circular(22),
                       ),
                     ),
                     child: Column(
@@ -98,21 +101,35 @@ class WasteStatCard extends StatelessWidget {
                         Text(
                           label,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: accentColor.withValues(alpha: 0.8),
+                            color: Colors.black87,
                             fontWeight: FontWeight.w700,
+                            fontSize: 12,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: DashboardThemeTokens.spacing4),
+                        const SizedBox(height: 4),
                         AnimatedSwitcher(
-                          duration: DashboardThemeTokens.animationNormal,
-                          child: Text(
-                            '${formatter.format(weight)} kg',
-                            key: ValueKey<String>(
-                              '${label}_${weight.toStringAsFixed(2)}',
-                            ),
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: accentColor,
-                              fontWeight: FontWeight.w800,
+                          duration: const Duration(milliseconds: 200),
+                          transitionBuilder: (child, anim) => FadeTransition(
+                            opacity: anim,
+                            child: ScaleTransition(scale: anim, child: child),
+                          ),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              '${formatter.format(weight)} kg',
+                              key: ValueKey<String>(
+                                '${label}_${weight.toStringAsFixed(2)}',
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: Colors.black,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 17,
+                              ),
                             ),
                           ),
                         ),

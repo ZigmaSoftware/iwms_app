@@ -39,6 +39,9 @@ class _CitizenAllotedVehicleMapScreenState
   LatLng? _lastCameraTarget;
   double? _lastCameraZoom;
 
+  // Track initial ward fit
+  bool _wardFitDone = false;
+
   // Info panel visibility
   bool _showVehicleDetails = false;
 
@@ -82,6 +85,12 @@ class _CitizenAllotedVehicleMapScreenState
 
     // Track when user interacts with map → disable auto-fit for 30 seconds
     _attachMapInteractionTracker();
+
+    // Fit ward on first render
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _fitWardToView();
+    });
   }
 
   @override
@@ -212,6 +221,39 @@ class _CitizenAllotedVehicleMapScreenState
     _initialFitDone = true;
   }
 
+  void _fitWardToView() {
+    if (_wardFitDone) return;
+    final points = GammaGeofenceConfig.polygon;
+    if (points.isEmpty) return;
+
+    final bounds = LatLngBounds.fromPoints(points);
+
+    _programmaticCameraMove = true;
+    _mapController.fitCamera(
+      CameraFit.bounds(
+        bounds: bounds,
+        padding: const EdgeInsets.all(32),
+        maxZoom: 16.5,
+        minZoom: 12.5,
+      ),
+    );
+
+    try {
+      final camera = _mapController.camera;
+      _lastCameraTarget = camera.center;
+      _lastCameraZoom = camera.zoom;
+    } catch (_) {
+      _lastCameraTarget = null;
+      _lastCameraZoom = null;
+    }
+
+    Future.delayed(const Duration(milliseconds: 300), () {
+      _programmaticCameraMove = false;
+    });
+
+    _wardFitDone = true;
+  }
+
   void _setVehicleDetailsVisibility(bool visible) {
     if (_showVehicleDetails == visible) return;
     setState(() {
@@ -306,7 +348,7 @@ class _CitizenAllotedVehicleMapScreenState
               // ---------------------------------------------------------------
 
               final size = MediaQuery.of(context).size;
-              final headerHeight = size.height * 0.20;
+              final headerHeight = size.height * 0.15;
 
               final headline = hasAssigned
                   ? 'Your collector is en route'
@@ -334,7 +376,7 @@ class _CitizenAllotedVehicleMapScreenState
                       headline: headline,
                       statusPrimary: statusPrimary,
                       statusSecondary: statusSecondary,
-                      statusContent: _buildHeaderFilterSection(context, state),
+                      statusContent: const SizedBox.shrink(),
                       onBack: () {
                         if (context.canPop()) {
                           context.pop();
@@ -379,29 +421,6 @@ class _CitizenAllotedVehicleMapScreenState
                               _buildZoomControls(
                                 state,
                                 hasAssigned,
-                              ),
-
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 200),
-                                child: hasAssigned
-                                    ? Align(
-                                        key: const ValueKey(
-                                            'assignedVehicleBubble'),
-                                        alignment: Alignment.center,
-                                        child: GestureDetector(
-                                          onTap: () =>
-                                              _setVehicleDetailsVisibility(
-                                                  true),
-                                          child: TrackingSpeechBubble(
-                                            message: assignedVehicle
-                                                    .registrationNumber ??
-                                                'View details',
-                                            icon: Icons
-                                                .local_shipping_rounded,
-                                          ),
-                                        ),
-                                      )
-                                    : const SizedBox.shrink(),
                               ),
 
                               if (state is VehicleLoading)
@@ -482,8 +501,8 @@ class _CitizenAllotedVehicleMapScreenState
       // Assigned vehicle
       if (vehicle != null)
         Marker(
-          width: 120,
-          height: 136,
+          width: 40,
+          height: 40,
           point: LatLng(vehicle.latitude, vehicle.longitude),
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -494,6 +513,10 @@ class _CitizenAllotedVehicleMapScreenState
               vehicle: vehicle,
               statusColor:
                   context.read<VehicleBloc>().getStatusColor(vehicle.status),
+              shadowColor: _statusShadowColor(
+                vehicle.status,
+                context.read<VehicleBloc>().getStatusColor(vehicle.status),
+              ),
             ),
           ),
         ),
@@ -577,34 +600,7 @@ class _CitizenAllotedVehicleMapScreenState
     BuildContext context,
     VehicleState state,
   ) {
-    final bloc = context.read<VehicleBloc>();
-    VehicleFilter active = VehicleFilter.all;
-
-    if (state is VehicleLoaded) {
-      active = state.activeFilter;
-    }
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: VehicleFilter.values.map((filter) {
-          final selected = active == filter;
-          final count = bloc.countVehiclesByFilter(filter);
-          final label =
-              '${filter.name[0].toUpperCase()}${filter.name.substring(1)} ($count)';
-
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: TrackingFilterChipButton(
-              label: label,
-              selected: selected,
-              onTap: () => bloc.add(VehicleFilterUpdated(filter)),
-            ),
-          );
-        }).toList(),
-      ),
-    );
+    return const SizedBox.shrink();
   }
 
   // ---------------------------------------------------------------------------
@@ -617,10 +613,10 @@ class _CitizenAllotedVehicleMapScreenState
     final double bottomOffset = 16.0 + safeBottom;
 
     return Positioned(
-      bottom: bottomOffset,
-      left: 16,
+      bottom: bottomOffset - 4,
+      left: 10,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 280),
+        constraints: const BoxConstraints(maxWidth: 190),
         child: Container(
           decoration: BoxDecoration(
             color: theme.colorScheme.surface.withValues(alpha: 0.95),
@@ -633,9 +629,9 @@ class _CitizenAllotedVehicleMapScreenState
               ),
             ],
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Wrap(
-            spacing: 8,
+            spacing: 4,
             alignment: WrapAlignment.start,
             children: _mapThemes.entries.map((entry) {
               final option = entry.key;
@@ -650,11 +646,17 @@ class _CitizenAllotedVehicleMapScreenState
                     setState(() => _selectedTheme = option);
                   }
                 },
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity:
+                    const VisualDensity(horizontal: -3, vertical: -3),
+                labelPadding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 selectedColor: theme.colorScheme.primary,
                 labelStyle: theme.textTheme.bodyMedium?.copyWith(
                   color:
                       isSelected ? Colors.white : theme.colorScheme.onSurface,
                   fontWeight: FontWeight.w600,
+                  fontSize: 11,
                 ),
               );
             }).toList(),
@@ -719,21 +721,21 @@ class _CitizenAllotedVehicleMapScreenState
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeOutCubic,
-      bottom: 20,
-      left: 20,
-      right: 20,
-      height: 220,
+      bottom: 14,
+      left: 16,
+      right: 16,
       child: Material(
-        elevation: 16,
-        borderRadius: BorderRadius.circular(18),
-        shadowColor: Colors.black.withValues(alpha: 0.2),
+        elevation: 14,
+        borderRadius: BorderRadius.circular(16),
+        shadowColor: Colors.black.withValues(alpha: 0.18),
         child: Container(
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
           ),
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(14),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Handle bar
@@ -748,23 +750,24 @@ class _CitizenAllotedVehicleMapScreenState
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
 
               // Header row
               Row(
                 children: [
                   Expanded(
                     child: Text(
-                      'Assigned vehicle • $reg',
+                      reg,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
+                        fontSize: 16,
                       ),
                     ),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
+                      horizontal: 8,
+                      vertical: 4,
                     ),
                     decoration: BoxDecoration(
                       color: statusColor.withValues(alpha: 0.14),
@@ -775,14 +778,14 @@ class _CitizenAllotedVehicleMapScreenState
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
                         color: statusColor,
-                        fontSize: 12,
+                        fontSize: 11,
                       ),
                     ),
                   ),
                 ],
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
 
               // Driver row
               Row(
@@ -794,37 +797,54 @@ class _CitizenAllotedVehicleMapScreenState
                     child: Text(
                       driver,
                       style: theme.textTheme.bodyMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
 
-              Wrap(
-                spacing: 16,
-                runSpacing: 8,
+              Row(
                 children: [
-                  _InfoTag(
-                    label: 'Last seen',
-                    value: lastUpdated,
-                  ),
-                  _InfoTag(
-                    label: 'Location',
-                    value: vehicle.address ?? GammaGeofenceConfig.name,
+                  Icon(Icons.access_time,
+                      color: theme.colorScheme.onSurface),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      lastUpdated,
+                      style: theme.textTheme.bodyMedium,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),
 
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
+
+              Row(
+                children: [
+                  Icon(Icons.place_outlined,
+                      color: theme.colorScheme.onSurface),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      vehicle.address ?? GammaGeofenceConfig.name,
+                      style: theme.textTheme.bodyMedium,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 10),
 
               Align(
                 alignment: Alignment.centerRight,
-                child: FilledButton.tonalIcon(
-                  onPressed: () => _focusOnVehicle(vehicle),
-                  icon: const Icon(Icons.location_searching_outlined),
-                  label: const Text('Center on vehicle'),
-                ),
+                child: const SizedBox.shrink(),
               ),
             ],
           ),
@@ -941,65 +961,32 @@ class _AssignedVehicleMarker extends StatelessWidget {
   const _AssignedVehicleMarker({
     required this.vehicle,
     required this.statusColor,
+    required this.shadowColor,
   });
 
   final VehicleModel vehicle;
   final Color statusColor;
+  final Color shadowColor;
 
   @override
   Widget build(BuildContext context) {
-    final reg = vehicle.registrationNumber ?? 'Unknown';
-    final driver = vehicle.driverName ?? 'Pending';
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: statusColor, width: 1.6),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.18),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: shadowColor,
+            blurRadius: 12,
+            offset: const Offset(0, 6),
           ),
-          child: Column(
-            children: [
-              Icon(
-                Icons.local_shipping,
-                color: statusColor,
-                size: 30,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                reg,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(
-                driver,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: statusColor.withValues(alpha: 0.9)),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 6),
-        Icon(Icons.place, color: statusColor, size: 22),
-      ],
+        ],
+      ),
+      child: Image.asset(
+        'assets/images/marker.png',
+        fit: BoxFit.contain,
+      ),
     );
   }
 }
@@ -1043,53 +1030,6 @@ class _MapControlButton extends StatelessWidget {
 }
 
 // ============================================================================
-// INFO TAG
-// ============================================================================
-
-class _InfoTag extends StatelessWidget {
-  const _InfoTag({
-    required this.label,
-    required this.value,
-  });
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ============================================================================
 // ENUMS & CONFIG
 // ============================================================================
 
@@ -1107,4 +1047,18 @@ class _MapThemeConfig {
   final String urlTemplate;
   final List<String> subdomains;
   final String attribution;
+}
+
+Color _statusShadowColor(String? status, Color fallback) {
+  final normalized = (status ?? '').toLowerCase();
+  if (normalized.contains('run')) {
+    return Colors.greenAccent.withValues(alpha: 0.5);
+  }
+  if (normalized.contains('idle')) {
+    return Colors.amber.withValues(alpha: 0.5);
+  }
+  if (normalized.contains('stop')) {
+    return Colors.redAccent.withValues(alpha: 0.5);
+  }
+  return fallback.withValues(alpha: 0.35);
 }

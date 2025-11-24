@@ -46,6 +46,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
   late final NotificationController _notificationController;
   late final HomeNavController _navController;
   late final GeofenceEvaluator _geofenceEvaluator;
+  DateTime? _lastGeofenceAlertAt;
 
   late final List<BannerSlide> _fallbackSlides;
 
@@ -256,7 +257,12 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
     final hasVehicleInside =
         vehicles.any((vehicle) => _geofenceEvaluator.isInsideGamma(vehicle));
 
-    if (hasVehicleInside) {
+    final now = DateTime.now();
+    final last = _lastGeofenceAlertAt;
+    final withinCooldown =
+        last != null && now.difference(last) < const Duration(minutes: 5);
+
+    if (hasVehicleInside && !withinCooldown) {
       const message =
           'Upcoming collection: our truck is approaching ${GammaGeofenceConfig.name}. '
           'Please segregate your dry, wet and mixed waste for pickup.';
@@ -267,6 +273,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
           timestamp: DateTime.now(),
         ),
       );
+      _lastGeofenceAlertAt = now;
     }
   }
 

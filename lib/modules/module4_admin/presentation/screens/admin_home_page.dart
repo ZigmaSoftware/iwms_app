@@ -36,10 +36,11 @@ class _AdminHomePageState extends State<AdminHomePage> {
       ),
       bottomNavigationBar: SafeArea(
         child: MotionTabBar(
-          labels: const ['Home', 'Map', 'Vehicles'],
+          labels: const ['Home', 'Map', 'Approvals', 'Vehicles'],
           icons: const [
             Icons.home_outlined,
             Icons.map_outlined,
+            Icons.fact_check_outlined,
             Icons.directions_bus_outlined,
           ],
           initialSelectedTab: _tabLabel(_activeTab),
@@ -71,6 +72,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
         return _DashboardTab(onLogout: () => _logout(context));
       case _AdminTab.liveMap:
         return const _LiveMapTab();
+      case _AdminTab.approvals:
+        return const _ApprovalsTab();
       case _AdminTab.vehicles:
         return const _VehiclesTab();
     }
@@ -87,6 +90,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
         return 'Home';
       case _AdminTab.liveMap:
         return 'Map';
+      case _AdminTab.approvals:
+        return 'Approvals';
       case _AdminTab.vehicles:
         return 'Vehicles';
     }
@@ -98,6 +103,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
         return _AdminTab.dashboard;
       case 'Map':
         return _AdminTab.liveMap;
+      case 'Approvals':
+        return _AdminTab.approvals;
       case 'Vehicles':
       default:
         return _AdminTab.vehicles;
@@ -107,6 +114,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
   _AdminTab _tabFromIndex(int index) {
     if (index == 0) return _AdminTab.dashboard;
     if (index == 1) return _AdminTab.liveMap;
+    if (index == 2) return _AdminTab.approvals;
     return _AdminTab.vehicles;
   }
 }
@@ -345,49 +353,86 @@ class _AttendanceCard extends StatelessWidget {
   const _AttendanceCard();
 
   static const stats = <_AttendanceStat>[
-    _AttendanceStat(label: 'Total', count: 158, color: Color(0xFF1B5E20)),
-    _AttendanceStat(label: 'Present', count: 158, color: Color(0xFF4CAF50)),
-    _AttendanceStat(label: 'Absent', count: 24, color: Color(0xFFE53935)),
-    _AttendanceStat(label: 'On Leave', count: 12, color: Color(0xFF1E88E5)),
+    _AttendanceStat(label: 'Total', count: 158, color: Color(0xFF2C2C2C)),
+    _AttendanceStat(label: 'Present', count: 158, color: Color(0xFF1B5E20)),
+    _AttendanceStat(label: 'Absent', count: 24, color: Color(0xFFB71C1C)),
+    _AttendanceStat(label: 'On Leave', count: 12, color: Color(0xFF0D47A1)),
   ];
 
   @override
   Widget build(BuildContext context) {
     return _DashboardSectionCard(
       title: 'Attendance Monitor',
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        children: stats
-            .map(
-              (stat) => Container(
-                width: 130,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: stat.color.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      stat.count.toString(),
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineSmall
-                          ?.copyWith(
-                              fontWeight: FontWeight.w800, color: stat.color),
+      child: LayoutBuilder(builder: (context, constraints) {
+        const spacing = 12.0;
+        final double width = constraints.maxWidth;
+        final int columns =
+            width >= 760 ? 3 : width >= 520 ? 2 : 1; // mobile-first breakpoints
+        final rawWidth = (width - spacing * (columns - 1)) / columns;
+        final double cardWidth = rawWidth.clamp(150.0, 260.0).toDouble();
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: stats
+              .map(
+                (stat) {
+                  final bool isNeutral = stat.label == 'Total';
+                  final Color accent =
+                      isNeutral ? Colors.black87 : stat.color;
+                  final Color background = isNeutral
+                      ? Colors.black.withOpacity(0.05)
+                      : stat.color.withOpacity(0.16);
+
+                  return ConstrainedBox(
+                    constraints: BoxConstraints(
+                        minWidth: cardWidth, maxWidth: cardWidth),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: background,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            stat.count.toString(),
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    color: accent),
+                          ),
+                          const SizedBox(height: 2),
+                          FittedBox(
+                            alignment: Alignment.centerLeft,
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              stat.label,
+                              maxLines: 1,
+                              softWrap: false,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                      color: Colors.black87,
+                                      fontSize: 11,
+                                      height: 1.2),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(stat.label,
-                        style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                ),
-              ),
-            )
-            .toList(),
-      ),
+                  );
+                },
+              )
+              .toList(),
+        );
+      }),
     );
   }
 }
@@ -508,6 +553,168 @@ class _DashboardSectionCard extends StatelessWidget {
             child,
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// APPROVALS TAB
+// ---------------------------------------------------------------------------
+
+class _ApprovalsTab extends StatelessWidget {
+  const _ApprovalsTab();
+
+  static const _requests = <_ApprovalRequest>[
+    _ApprovalRequest(
+        title: 'Driver | Arun Menon',
+        subtitle: 'Annual leave request • 3 days • requested by driver',
+        status: _ApprovalStatus.pending,
+        dateLabel: 'Dec 12, 2025'),
+    _ApprovalRequest(
+        title: 'Operator | Lata Fernandes',
+        subtitle: 'Sick leave • 1 day • requested by operator',
+        status: _ApprovalStatus.approved,
+        dateLabel: 'Dec 10, 2025'),
+    _ApprovalRequest(
+        title: 'Driver | Naveen Pillai',
+        subtitle: 'Shift swap fallback • requested by driver',
+        status: _ApprovalStatus.rejected,
+        dateLabel: 'Dec 08, 2025'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final pending = _requests
+        .where((request) => request.status == _ApprovalStatus.pending)
+        .toList();
+    final approved = _requests
+        .where((request) => request.status == _ApprovalStatus.approved)
+        .toList();
+    final rejected = _requests
+        .where((request) => request.status == _ApprovalStatus.rejected)
+        .toList();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 90),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Approvals',
+            style: theme.textTheme.headlineSmall
+                ?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Leave approvals requested by the driver and operator.',
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(color: Colors.black54),
+          ),
+          const SizedBox(height: 16),
+          _ApprovalSection(
+              title: 'Pending', requests: pending),
+          _ApprovalSection(title: 'Approved', requests: approved),
+          _ApprovalSection(title: 'Rejected', requests: rejected),
+        ],
+      ),
+    );
+  }
+}
+
+class _ApprovalSection extends StatelessWidget {
+  const _ApprovalSection({required this.title, required this.requests});
+
+  final String title;
+  final List<_ApprovalRequest> requests;
+
+  @override
+  Widget build(BuildContext context) {
+    if (requests.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: _DashboardSectionCard(
+        title: '$title (${requests.length})',
+        child: Column(
+          children: requests
+              .map(
+                (request) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: _ApprovalTile(request: request),
+                ),
+              )
+              .toList(),
+        ),
+      ),
+    );
+  }
+}
+
+class _ApprovalTile extends StatelessWidget {
+  const _ApprovalTile({required this.request});
+
+  final _ApprovalRequest request;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: request.color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: request.color.withOpacity(0.2)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: request.color.withOpacity(0.16),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(request.icon, color: request.color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  request.title,
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  request.subtitle,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: Colors.black87),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                request.statusLabel,
+                style: TextStyle(
+                    color: request.color, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                request.dateLabel,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: Colors.black54),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -719,6 +926,54 @@ class _SensorChip extends StatelessWidget {
 // DATA CLASSES
 // ---------------------------------------------------------------------------
 
+class _ApprovalRequest {
+  const _ApprovalRequest(
+      {required this.title,
+      required this.subtitle,
+      required this.status,
+      required this.dateLabel});
+
+  final String title;
+  final String subtitle;
+  final _ApprovalStatus status;
+  final String dateLabel;
+
+  Color get color {
+    switch (status) {
+      case _ApprovalStatus.pending:
+        return const Color(0xFFF9A825);
+      case _ApprovalStatus.approved:
+        return const Color(0xFF1B5E20);
+      case _ApprovalStatus.rejected:
+        return const Color(0xFFB71C1C);
+    }
+  }
+
+  IconData get icon {
+    switch (status) {
+      case _ApprovalStatus.pending:
+        return Icons.schedule_outlined;
+      case _ApprovalStatus.approved:
+        return Icons.check_circle_outline;
+      case _ApprovalStatus.rejected:
+        return Icons.highlight_off_outlined;
+    }
+  }
+
+  String get statusLabel {
+    switch (status) {
+      case _ApprovalStatus.pending:
+        return 'Pending';
+      case _ApprovalStatus.approved:
+        return 'Approved';
+      case _ApprovalStatus.rejected:
+        return 'Rejected';
+    }
+  }
+}
+
+enum _ApprovalStatus { pending, approved, rejected }
+
 class _WasteSlice {
   const _WasteSlice(this.label, this.tons, this.color);
   final String label;
@@ -795,4 +1050,4 @@ class _SensorStat {
   final int inactive;
 }
 
-enum _AdminTab { dashboard, liveMap, vehicles }
+enum _AdminTab { dashboard, liveMap, approvals, vehicles }

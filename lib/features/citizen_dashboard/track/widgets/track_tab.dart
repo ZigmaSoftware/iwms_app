@@ -4,7 +4,6 @@ import '../controllers/track_controller.dart';
 import '../models/waste_period.dart';
 import '../models/waste_summary.dart';
 import '../widgets/waste_stat_card.dart';
-import 'dart:math' as math;
 
 enum WasteMetric { total, wet, dry, mixed }
 
@@ -34,6 +33,7 @@ class _TrackTabState extends State<TrackTab> {
     final controller = widget.controller;
     final theme = Theme.of(context);
     final summary = controller.currentSummary;
+    final screenWidth = MediaQuery.sizeOf(context).width;
 
     return RefreshIndicator(
       onRefresh: () => controller.refresh(force: true),
@@ -47,13 +47,14 @@ class _TrackTabState extends State<TrackTab> {
         ),
         children: [
           _buildTrackHeader(theme),
-          const SizedBox(height: DashboardThemeTokens.spacing16),
+          const SizedBox(height: 16),
           _buildTrackSummarySection(theme, summary),
-          const SizedBox(height: DashboardThemeTokens.spacing20),
+          const SizedBox(height: 20),
           Text(
             'Data refreshed for ${controller.displayFormat.format(controller.selectedDate)}',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
+              fontSize: screenWidth * 0.032,
             ),
           ),
         ],
@@ -62,51 +63,70 @@ class _TrackTabState extends State<TrackTab> {
   }
 
   Widget _buildTrackHeader(ThemeData theme) {
-    return Row(
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final titleStyle = theme.textTheme.headlineSmall?.copyWith(
+      fontWeight: FontWeight.w900,
+      color: widget.textColor,
+      fontSize: screenWidth * 0.06,
+    );
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Track Your Waste',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: widget.textColor,
-                ),
-              ),
-              const SizedBox(height: DashboardThemeTokens.spacing4),
-              Text(
-                'Live weighment figures from the city for the selected date.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: DashboardThemeTokens.spacing8),
-              Wrap(
-                spacing: DashboardThemeTokens.spacing8,
-                children: WastePeriod.values.map((period) {
-                  final selected = widget.controller.selectedPeriod == period;
-                  return ChoiceChip(
-                    label: Text(_labelForPeriod(period)),
-                    selected: selected,
-                    onSelected: (_) {
-                      widget.controller.setPeriod(period);
-                    },
-                    selectedColor: widget.highlightColor,
-                  );
-                }).toList(),
-              ),
-            ],
+        Text(
+          'Track Your Waste',
+          style: titleStyle,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Live weighment figures from the city for the selected date.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontSize: screenWidth * 0.035,
           ),
         ),
-        const SizedBox(width: DashboardThemeTokens.spacing12),
-        _CalendarChip(
-          highlightColor: widget.highlightColor,
-          label: widget.controller.shortDisplayFormat
-              .format(widget.controller.selectedDate),
-          onTap: widget.onPickDate,
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.2),
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<WastePeriod>(
+                    isExpanded: true,
+                    value: widget.controller.selectedPeriod,
+                    items: WastePeriod.values
+                        .map(
+                          (p) => DropdownMenuItem(
+                            value: p,
+                            child: Text(_labelForPeriod(p)),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          widget.controller.setPeriod(value);
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            _CalendarChip(
+              highlightColor: widget.highlightColor,
+              label: widget.controller.shortDisplayFormat
+                  .format(widget.controller.selectedDate),
+              onTap: widget.onPickDate,
+            ),
+          ],
         ),
       ],
     );
@@ -176,38 +196,47 @@ class _TrackTabState extends State<TrackTab> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildHeroSummaryCard(theme, summary),
-        const SizedBox(height: DashboardThemeTokens.spacing16),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (var i = 0; i < cards.length; i++) ...[
-              if (i > 0) const SizedBox(width: DashboardThemeTokens.spacing12),
-              Expanded(
-                child: WasteStatCard(
-                  assetPath: cards[i].asset,
-                  label: cards[i].label,
-                  weight: cards[i].weight,
-                  accentColor: cards[i].color,
-                  formatter: widget.controller.weightFormatter,
-                  isSelected: _activeMetric == cards[i].metric,
-                  onTap: () => _toggleMetric(cards[i].metric),
-                ),
-              ),
-            ],
-          ],
+        const SizedBox(height: 16),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final available = constraints.maxWidth;
+            final itemWidth = available > 0 ? (available - 24) / 3 : available;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: cards
+                  .map(
+                    (card) => SizedBox(
+                      width: itemWidth,
+                      child: WasteStatCard(
+                        assetPath: card.asset,
+                        label: card.label,
+                        weight: card.weight,
+                        accentColor: card.color,
+                        formatter: widget.controller.weightFormatter,
+                        isSelected: _activeMetric == card.metric,
+                        onTap: () => _toggleMetric(card.metric),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            );
+          },
         ),
-        const SizedBox(height: DashboardThemeTokens.spacing16),
+        const SizedBox(height: 16),
         _buildMetricDetailCard(theme, summary),
-        const SizedBox(height: DashboardThemeTokens.spacing16),
+        const SizedBox(height: 16),
         _buildTrendSection(theme),
       ],
     );
   }
 
   Widget _buildHeroSummaryCard(ThemeData theme, WasteSummary summary) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final horizontal = screenWidth * 0.05;
     return AnimatedContainer(
       duration: DashboardThemeTokens.animationSlow,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
+      padding: EdgeInsets.symmetric(horizontal: horizontal, vertical: 18),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
@@ -487,174 +516,8 @@ class _TrackTabState extends State<TrackTab> {
   }
 
   Widget _buildTrendSection(ThemeData theme) {
-    final entries = widget.controller.summaries.entries.toList()
-      ..sort((a, b) => a.value.date.compareTo(b.value.date));
-
-    if (entries.isEmpty) {
-      return _buildTrackStatusCard(
-        message: 'No trend data yet. Pull to refresh for recent activity.',
-        accentColor: widget.highlightColor,
-      );
-    }
-
-    // Limit to last 14 points for readability
-    final data = entries.length > 14 ? entries.sublist(entries.length - 14) : entries;
-    final maxWeight = data.fold<double>(
-      0,
-      (prev, e) => math.max(prev, e.value.totalNetWeight),
-    );
-    final safeMax = maxWeight <= 0 ? 1.0 : maxWeight;
-
-    final current = data.last.value;
-    final previous = data.length > 1 ? data[data.length - 2].value : null;
-    final delta = previous != null ? current.totalNetWeight - previous.totalNetWeight : 0.0;
-
-    Color deltaColor;
-    String deltaLabel;
-    if (previous == null) {
-      deltaColor = theme.colorScheme.onSurfaceVariant;
-      deltaLabel = 'No previous data';
-    } else if (delta.abs() < 0.01) {
-      deltaColor = theme.colorScheme.onSurfaceVariant;
-      deltaLabel = 'No change vs last reading';
-    } else if (delta < 0) {
-      deltaColor = Colors.green;
-      deltaLabel =
-          '${widget.controller.weightFormatter.format(delta.abs())} kg lower than last reading';
-    } else {
-      deltaColor = Colors.orange;
-      deltaLabel =
-          '${widget.controller.weightFormatter.format(delta)} kg higher than last reading';
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(DashboardThemeTokens.radiusXL),
-        border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.2),
-        ),
-        boxShadow: const [DashboardThemeTokens.lightShadow],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                'Trend (last ${data.length} days)',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              Icon(
-                delta < 0 ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
-                color: deltaColor,
-                size: 18,
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  deltaLabel,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: deltaColor,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: DashboardThemeTokens.spacing12),
-          SizedBox(
-            height: 140,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                for (var i = 0; i < data.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 6),
-                  _TrendBar(
-                    dateLabel: widget.controller.shortDisplayFormat.format(data[i].value.date),
-                    weight: data[i].value.totalNetWeight,
-                    maxWeight: safeMax,
-                    highlight: i == data.length - 1,
-                    accent: widget.highlightColor,
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: DashboardThemeTokens.spacing8),
-          Text(
-            'Each bar shows total waste collected per day. Last bar is your most recent reading.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TrendBar extends StatelessWidget {
-  const _TrendBar({
-    required this.dateLabel,
-    required this.weight,
-    required this.maxWeight,
-    required this.highlight,
-    required this.accent,
-  });
-
-  final String dateLabel;
-  final double weight;
-  final double maxWeight;
-  final bool highlight;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final normalized =
-        maxWeight <= 0 ? 0.1 : (weight / maxWeight).clamp(0.08, 1.0);
-    final barHeight = 120 * normalized;
-
-    return Tooltip(
-      message: '$dateLabel · ${weight.toStringAsFixed(1)} kg',
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          AnimatedContainer(
-            duration: DashboardThemeTokens.animationNormal,
-            width: highlight ? 16 : 12,
-            height: barHeight,
-            decoration: BoxDecoration(
-              color: highlight ? accent : accent.withValues(alpha: 0.4),
-              borderRadius: BorderRadius.circular(10),
-              boxShadow: highlight
-                  ? [
-                      BoxShadow(
-                        color: accent.withValues(alpha: 0.35),
-                        blurRadius: 10,
-                        offset: const Offset(0, 6),
-                      ),
-                    ]
-                  : null,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            dateLabel,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
+    // Trend chart removed per request.
+    return const SizedBox.shrink();
   }
 }
 

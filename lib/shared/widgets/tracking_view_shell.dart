@@ -47,30 +47,6 @@ class TrackingHeroHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
       child: Stack(
         children: [
-          Positioned(
-            right: -16,
-            top: 12,
-            child: Opacity(
-              opacity: 0.15,
-              child: Icon(
-                Icons.forest_rounded,
-                size: 110,
-                color: Colors.white.withValues(alpha: 0.8),
-              ),
-            ),
-          ),
-          Positioned(
-            left: -8,
-            bottom: 0,
-            child: Opacity(
-              opacity: 0.26,
-              child: Icon(
-                Icons.park_rounded,
-                size: 82,
-                color: Colors.white.withValues(alpha: 0.9),
-              ),
-            ),
-          ),
           Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
