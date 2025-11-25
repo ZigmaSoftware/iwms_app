@@ -247,15 +247,20 @@ class _OperatorHeader extends StatelessWidget {
           const SizedBox(height: 24),
           Row(
             children: [
-              Expanded(
+              Flexible(
+                flex: 1,
+                fit: FlexFit.tight,
                 child: _HeaderStat(
                   title: 'Today',
                   subtitle: dateLabel,
                   icon: Icons.calendar_today_rounded,
+                  
                 ),
               ),
               const SizedBox(width: 12),
-              Expanded(
+              Flexible(
+                flex: 1,
+                fit: FlexFit.loose,
                 child: _HeaderStat(
                   title: 'Route status',
                   subtitle: '11 / 18 sites done',

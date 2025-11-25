@@ -31,6 +31,12 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen> {
     super.initState();
     _checkLocationServices();
     _determinePosition();
+    // Ensure any existing session is cleared when landing on the operator login.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<AuthBloc>().add(AuthLogoutRequested());
+      }
+    });
   }
 
   @override
@@ -198,11 +204,17 @@ Future<void> _handleLogin() async {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final size = MediaQuery.of(context).size;
-    return WillPopScope(
-      onWillPop: () async {
-        // Prevent app close; always return to role selection.
-        context.go(AppRoutePaths.selectUser);
-        return false;
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) {
+          context.read<AuthBloc>().add(AuthLogoutRequested());
+          Future.microtask(() {
+            if (mounted) {
+              context.go(AppRoutePaths.selectUser);
+            }
+          });
+        }
       },
       child: Scaffold(
         backgroundColor: _operatorBackground,
@@ -252,6 +264,16 @@ Future<void> _handleLogin() async {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () => context.go(AppRoutePaths.selectUser),
+              ),
+              const Spacer(),
+            ],
+          ),
+          const SizedBox(height: 4),
           SizedBox(
             height: size.height * 0.12,
             child: Align(

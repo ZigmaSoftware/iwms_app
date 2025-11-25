@@ -5,7 +5,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../../../core/constants.dart';
 import '../../../core/di.dart';
 import '../../../core/geofence_config.dart';
 import '../../../data/models/vehicle_model.dart';
@@ -13,7 +12,6 @@ import '../../../logic/vehicle_tracking/vehicle_bloc.dart';
 import '../../../logic/vehicle_tracking/vehicle_event.dart';
 import '../../../router/app_router.dart';
 import '../../../shared/widgets/home_base_marker.dart';
-import '../../../shared/widgets/tracking_filter_chip_button.dart';
 import '../../../shared/widgets/tracking_view_shell.dart';
 
 class CitizenAllotedVehicleMapScreen extends StatefulWidget {
