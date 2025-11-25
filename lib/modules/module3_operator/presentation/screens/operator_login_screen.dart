@@ -265,25 +265,21 @@ Future<void> _handleLogin() async {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => context.go(AppRoutePaths.selectUser),
+              SizedBox(
+                height: size.height * 0.12,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Image.asset(
+                    'asset/images/logo.png',
+                    height: size.height * 0.1,
+                    fit: BoxFit.contain,
+                  ),
+                ),
               ),
-              const Spacer(),
+              IconButton(onPressed: (){context.push("/select-user");}, icon: Icon(Icons.home,color: Colors.white,))
             ],
-          ),
-          const SizedBox(height: 4),
-          SizedBox(
-            height: size.height * 0.12,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Image.asset(
-                'asset/images/logo.png',
-                height: size.height * 0.1,
-                fit: BoxFit.contain,
-              ),
-            ),
           ),
           const SizedBox(height: 12),
           Text(

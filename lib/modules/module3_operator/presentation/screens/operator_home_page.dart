@@ -319,6 +319,14 @@ class _OverviewPage extends StatelessWidget {
         icon: Icons.assignment_turned_in_outlined,
         onTap: () => _showPlaceholder(context, 'Assignments refreshed'),
       ),
+       _QuickAction(
+        label: 'Attendance',
+        icon: Icons.face_3_outlined,
+        onTap: () {
+           context.push(AppRoutePaths.attendanceHomepageOperator);
+        },
+        // onTap: () => _showPlaceholder(context, 'Assignments refreshed'),
+      ),
     ];
 
     final clusters = [
