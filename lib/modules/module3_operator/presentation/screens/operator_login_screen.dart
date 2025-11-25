@@ -244,16 +244,22 @@ Future<void> _handleLogin() async {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            height: size.height * 0.12,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Image.asset(
-                'asset/images/logo.png',
-                height: size.height * 0.1,
-                fit: BoxFit.contain,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              SizedBox(
+                height: size.height * 0.12,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Image.asset(
+                    'asset/images/logo.png',
+                    height: size.height * 0.1,
+                    fit: BoxFit.contain,
+                  ),
+                ),
               ),
-            ),
+              IconButton(onPressed: (){context.push("/select-user");}, icon: Icon(Icons.home,color: Colors.white,))
+            ],
           ),
           const SizedBox(height: 12),
           Text(

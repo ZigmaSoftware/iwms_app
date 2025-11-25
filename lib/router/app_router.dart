@@ -9,6 +9,7 @@ import 'package:iwms_citizen_app/logic/vehicle_tracking/vehicle_bloc.dart';
 
 // --- Import all your screens ---
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/splashscreen.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehomepage.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_data_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_home_page.dart';
 import 'package:iwms_citizen_app/presentation/user_selection/user_selection_screen.dart';
@@ -48,6 +49,7 @@ class AppRoutePaths {
   static const String citizenProfile = '/citizen/profile';
   static const String citizenChatbot = '/citizen/chatbot';
   static const String operatorLogin = '/operator/login';
+   static const String attendanceHomepageOperator ='/operator/attendance/homepage';
 }
 
 // --- The App Router ---
@@ -241,6 +243,23 @@ class AppRouter {
     );
   },
 ),
+  GoRoute(
+        name: 'attendanceHomepageOperator',
+        path: AppRoutePaths.attendanceHomepageOperator,
+        pageBuilder: (context, state) {
+          final data = state.extra as Map<String, dynamic>? ?? {};
+          return _buildTransitionPage(
+            state,
+            HomePage1(
+              empid: '504',
+              userName: 'Operator',
+              // vehicleId: data['vehicleId'] as String?,
+              // vehicleNumber: data['vehicleNumber'] as String?,
+              // siteName: data['siteName'] as String?,
+            ),
+          );
+        },
+      ),
 
     ];
 
