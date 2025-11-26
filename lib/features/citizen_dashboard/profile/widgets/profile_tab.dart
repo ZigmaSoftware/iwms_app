@@ -34,7 +34,7 @@ class ProfileTab extends StatelessWidget {
       children: [
         Container(
           width: double.infinity,
-          height: headerHeight * 0.68,
+          height: headerHeight * 0.55,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: headerGradientColors,

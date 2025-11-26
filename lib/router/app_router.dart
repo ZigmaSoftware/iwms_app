@@ -16,6 +16,9 @@ import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/o
 import 'package:iwms_citizen_app/presentation/user_selection/user_selection_screen.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/auth_intro.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/login.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/register.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/chatbot.dart';
+    
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/home.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/calender.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/track_waste.dart';
@@ -31,6 +34,7 @@ import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/sc
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/citizen_intro_slides.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/driver_home_page.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/driver_login_screen.dart';
+import 'package:iwms_citizen_app/modules/module4_admin/presentation/screens/admin_home_page.dart';
 
 // --- Define static route paths ---
 class AppRoutePaths {
@@ -43,6 +47,7 @@ class AppRoutePaths {
   static const String citizenWelcome = '/citizen/welcome';
   static const String driverLogin = '/driver/login';
   static const String driverHome = '/driver/home';
+  static const String adminHome = '/admin/home';
   static const String citizenHistory = '/citizen/history';
   static const String citizenTrack = '/citizen/track';
   static const String citizenDriverDetails = '/citizen/driver-details';
@@ -53,10 +58,11 @@ class AppRoutePaths {
   static const String citizenProfile = '/citizen/profile';
   static const String citizenChatbot = '/citizen/chatbot';
   static const String operatorLogin = '/operator/login';
-  static const String adminHome = '/admin/home';
- static const String  attendanceHomepageOperator ='/operator/home';
-}
+  // static const String adminHome = '/admin/home';
 
+   static const String attendanceHomepageOperator ='/operator/attendance/homepage';
+
+}
 // --- The App Router ---
 class AppRouter {
   final AuthBloc authBloc;
@@ -228,24 +234,29 @@ class AppRouter {
           );
         },
       ),
-      GoRoute(
-        path: '/operator-home',
-        pageBuilder: (context, state) =>
-            _buildTransitionPage(state, const OperatorHomePage()),
+          GoRoute(
+      path: '/operator-home',
+      builder: (context, state) => const OperatorHomePage(),
+    ),
+    GoRoute(
+  path: '/operator-data',
+  pageBuilder: (context, state) {
+    final data = state.extra as Map<String, dynamic>;
+    return CustomTransitionPage(
+      key: state.pageKey,
+      child: OperatorDataScreen(
+        customerId: data['customerId'],
+        customerName: data['customerName'],
+        contactNo: data['contactNo'],
+        latitude: data['latitude'],
+        longitude: data['longitude'],
       ),
-      GoRoute(
-        path: '/operator-data',
-        pageBuilder: (context, state) {
-          final data = state.extra as Map<String, dynamic>;
-          return _buildTransitionPage(
-            state,
-            OperatorDataScreen(
-              customerId: data['customerId'],
-              customerName: data['customerName'],
-              contactNo: data['contactNo'],
-              latitude: data['latitude'],
-              longitude: data['longitude'],
-            ),
+      transitionsBuilder: (_, animation, __, child) {
+        return FadeTransition(
+          opacity: animation,
+          child: child,
+        );
+      },
     );
   },
 ),
@@ -263,9 +274,10 @@ class AppRouter {
               // vehicleNumber: data['vehicleNumber'] as String?,
               // siteName: data['siteName'] as String?,
             ),
-                );
-              },
-            ),
+          );
+        },
+      ),
+
     ];
 
     router = GoRouter(
