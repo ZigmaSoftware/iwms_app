@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../router/app_router.dart';
@@ -13,6 +14,7 @@ class CitizenIntroSlidesScreen extends StatefulWidget {
 
 class _CitizenIntroSlidesScreenState extends State<CitizenIntroSlidesScreen> {
   final PageController _pageController = PageController();
+  static const Duration _pageAnimationDuration = Duration(milliseconds: 700);
   int _activeIndex = 0;
 
   void _handlePageChanged(int index) {
@@ -21,17 +23,26 @@ class _CitizenIntroSlidesScreenState extends State<CitizenIntroSlidesScreen> {
     });
   }
 
-  void _openRegister() {
-    context.go(AppRoutePaths.citizenRegister);
+  void _goNext() {
+    if (_activeIndex >= _introSlides.length - 1) {
+      _openAuthLanding();
+      return;
+    }
+    _pageController.nextPage(
+      duration: _pageAnimationDuration,
+      curve: Curves.easeInOutCubic,
+    );
   }
 
-  void _openLogin() {
-    context.go(AppRoutePaths.citizenLogin);
+  void _goPrevious() {
+    if (_activeIndex == 0) return;
+    _pageController.previousPage(
+      duration: _pageAnimationDuration,
+      curve: Curves.easeInOutCubic,
+    );
   }
 
-  void _skipToRegistration() {
-    context.go(AppRoutePaths.citizenRegister);
-  }
+  void _openAuthLanding() => context.go(AppRoutePaths.citizenAuthIntro);
 
   @override
   void dispose() {
@@ -43,12 +54,20 @@ class _CitizenIntroSlidesScreenState extends State<CitizenIntroSlidesScreen> {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final slide = _introSlides[_activeIndex];
+    final textShadows = [
+      Shadow(
+        color: Colors.black.withOpacity(0.45),
+        blurRadius: 18,
+        offset: const Offset(0, 8),
+      ),
+    ];
 
     return Scaffold(
       body: Stack(
         children: [
           PageView.builder(
             controller: _pageController,
+            physics: const BouncingScrollPhysics(),
             onPageChanged: _handlePageChanged,
             itemCount: _introSlides.length,
             itemBuilder: (context, index) {
@@ -67,9 +86,47 @@ class _CitizenIntroSlidesScreenState extends State<CitizenIntroSlidesScreen> {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.35),
-                    Colors.black.withOpacity(0.78),
+                    Colors.black.withOpacity(0.08),
+                    Colors.black.withOpacity(0.6),
                   ],
+                ),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: _goPrevious,
+                  ),
+                ),
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: _goNext,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: IgnorePointer(
+              child: Container(
+                height: 220,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(0.0),
+                      Colors.black.withOpacity(0.6),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -98,7 +155,7 @@ class _CitizenIntroSlidesScreenState extends State<CitizenIntroSlidesScreen> {
                   ),
                   const Spacer(),
                   TextButton(
-                    onPressed: _skipToRegistration,
+                    onPressed: _openAuthLanding,
                     child: const Text(
                       'Skip',
                       style: TextStyle(
@@ -138,54 +195,40 @@ class _CitizenIntroSlidesScreenState extends State<CitizenIntroSlidesScreen> {
                     }),
                   ),
                   const SizedBox(height: 24),
-                  Text(
-                    slide.title,
-                    textAlign: TextAlign.left,
-                    style: textTheme.headlineMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    slide.description,
-                    textAlign: TextAlign.left,
-                    style: textTheme.bodyLarge?.copyWith(
-                      color: Colors.white70,
-                      height: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _openRegister,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2E7D5A),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
+                  Animate(
+                    key: ValueKey(slide.title),
+                    effects: [
+                      FadeEffect(duration: 520.ms, curve: Curves.easeOutCubic),
+                      SlideEffect(
+                        begin: const Offset(0, 0.24),
+                        end: Offset.zero,
+                        duration: 620.ms,
+                        curve: Curves.easeOutCubic,
+                      ),
+                    ],
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          slide.title,
+                          textAlign: TextAlign.left,
+                          style: textTheme.headlineSmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            shadows: textShadows,
+                          ),
                         ),
-                      ),
-                      child: const Text(
-                        'Create an account',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
+                        const SizedBox(height: 12),
+                        Text(
+                          slide.description,
+                          textAlign: TextAlign.left,
+                          style: textTheme.bodyLarge?.copyWith(
+                            color: Colors.white.withOpacity(0.9),
+                            height: 1.5,
+                            shadows: textShadows,
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: _openLogin,
-                    child: const Text(
-                      'Already have an account? Sign in',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        decoration: TextDecoration.underline,
-                      ),
+                      ],
                     ),
                   ),
                 ],
@@ -215,24 +258,24 @@ const List<_IntroSlide> _introSlides = [
     title: 'Friendly doorstep pickups',
     description:
         'Hand over your wet, dry and mixed bags with a smile - our crew is here to help on time.',
-    assetPath: 'assets/intro/intro2.png',
+    assetPath: 'assets/intro/intro1.png',
   ),
   _IntroSlide(
     title: 'Track your progress',
     description:
         'See how much you recycled this month and stay motivated with easy-to-read stats.',
-    assetPath: 'assets/intro/intro3.png',
+    assetPath: 'assets/intro/intro2.png',
   ),
   _IntroSlide(
     title: 'Smarter recycling plants',
     description:
         'Every sorted bag powers automated recycling lines that turn trash into new materials.',
-    assetPath: 'assets/intro/intro4.png',
+    assetPath: 'assets/intro/intro3.png',
   ),
   _IntroSlide(
     title: 'Keep our city green',
     description:
         'Rolling hills, bright trees and clean rivers stay beautiful when we segregate waste every day.',
-    assetPath: 'assets/intro/intro1.png',
+    assetPath: 'assets/intro/intro4.png',
   ),
 ];

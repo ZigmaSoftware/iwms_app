@@ -6,6 +6,7 @@ import 'package:iwms_citizen_app/core/di.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/logic/vehicle_tracking/vehicle_bloc.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/chatbot.dart';
 
 // --- Import all your screens ---
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/splashscreen.dart';
@@ -15,8 +16,6 @@ import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/o
 import 'package:iwms_citizen_app/presentation/user_selection/user_selection_screen.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/auth_intro.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/login.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/register.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/chatbot.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/home.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/calender.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/track_waste.dart';
@@ -27,7 +26,11 @@ import 'package:iwms_citizen_app/modules/module1_citizen/citizen/personal_map.da
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/alloted_vehicle_map.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/grievance_chat.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_login_screen.dart';
+import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/dashboard_screen.dart'
+    show DashboardScreen;
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/citizen_intro_slides.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/driver_home_page.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/driver_login_screen.dart';
 
 // --- Define static route paths ---
 class AppRoutePaths {
@@ -36,9 +39,10 @@ class AppRoutePaths {
   static const String citizenIntroSlides = '/citizen/intro';
   static const String citizenAuthIntro = '/citizen/auth';
   static const String citizenLogin = '/citizen/login';
-  static const String citizenRegister = '/citizen/register';
   static const String citizenHome = '/citizen/home';
   static const String citizenWelcome = '/citizen/welcome';
+  static const String driverLogin = '/driver/login';
+  static const String driverHome = '/driver/home';
   static const String citizenHistory = '/citizen/history';
   static const String citizenTrack = '/citizen/track';
   static const String citizenDriverDetails = '/citizen/driver-details';
@@ -49,7 +53,8 @@ class AppRoutePaths {
   static const String citizenProfile = '/citizen/profile';
   static const String citizenChatbot = '/citizen/chatbot';
   static const String operatorLogin = '/operator/login';
-   static const String attendanceHomepageOperator ='/operator/attendance/homepage';
+  static const String adminHome = '/admin/home';
+ static const String  attendanceHomepageOperator ='/operator/home';
 }
 
 // --- The App Router ---
@@ -86,6 +91,11 @@ class AppRouter {
             _buildTransitionPage(state, const OperatorLoginScreen()),
       ),
       GoRoute(
+        path: AppRoutePaths.driverLogin,
+        pageBuilder: (context, state) =>
+            _buildTransitionPage(state, const DriverLoginScreen()),
+      ),
+      GoRoute(
         path: AppRoutePaths.citizenAuthIntro,
         pageBuilder: (context, state) =>
             _buildTransitionPage(state, const CitizenAuthIntroScreen()),
@@ -94,15 +104,6 @@ class AppRouter {
         path: AppRoutePaths.citizenLogin,
         pageBuilder: (context, state) =>
             _buildTransitionPage(state, const LoginScreen()),
-      ),
-      GoRoute(
-        path: AppRoutePaths.citizenRegister,
-        pageBuilder: (context, state) {
-          return _buildTransitionPage(
-            state,
-            const RegisterScreen(),
-          );
-        },
       ),
       GoRoute(
         path: AppRoutePaths.citizenWelcome,
@@ -142,6 +143,16 @@ class AppRouter {
         path: AppRoutePaths.citizenTrack,
         pageBuilder: (context, state) =>
             _buildTransitionPage(state, TrackWasteScreen()),
+      ),
+      GoRoute(
+        path: AppRoutePaths.driverHome,
+        pageBuilder: (context, state) =>
+            _buildTransitionPage(state, const DriverHomePage()),
+      ),
+      GoRoute(
+        path: AppRoutePaths.adminHome,
+        pageBuilder: (context, state) =>
+            _buildTransitionPage(state, const DashboardScreen()),
       ),
       GoRoute(
         path: AppRoutePaths.citizenGrievanceChat,
@@ -217,29 +228,24 @@ class AppRouter {
           );
         },
       ),
-          GoRoute(
-      path: '/operator-home',
-      builder: (context, state) => const OperatorHomePage(),
-    ),
-    GoRoute(
-  path: '/operator-data',
-  pageBuilder: (context, state) {
-    final data = state.extra as Map<String, dynamic>;
-    return CustomTransitionPage(
-      key: state.pageKey,
-      child: OperatorDataScreen(
-        customerId: data['customerId'],
-        customerName: data['customerName'],
-        contactNo: data['contactNo'],
-        latitude: data['latitude'],
-        longitude: data['longitude'],
+      GoRoute(
+        path: '/operator-home',
+        pageBuilder: (context, state) =>
+            _buildTransitionPage(state, const OperatorHomePage()),
       ),
-      transitionsBuilder: (_, animation, __, child) {
-        return FadeTransition(
-          opacity: animation,
-          child: child,
-        );
-      },
+      GoRoute(
+        path: '/operator-data',
+        pageBuilder: (context, state) {
+          final data = state.extra as Map<String, dynamic>;
+          return _buildTransitionPage(
+            state,
+            OperatorDataScreen(
+              customerId: data['customerId'],
+              customerName: data['customerName'],
+              contactNo: data['contactNo'],
+              latitude: data['latitude'],
+              longitude: data['longitude'],
+            ),
     );
   },
 ),
@@ -257,15 +263,15 @@ class AppRouter {
               // vehicleNumber: data['vehicleNumber'] as String?,
               // siteName: data['siteName'] as String?,
             ),
-          );
-        },
-      ),
-
+                );
+              },
+            ),
     ];
 
     router = GoRouter(
       routes: _routes,
-      initialLocation: AppRoutePaths.splash,
+      // Skip the splash screen to avoid startup crashes; land on role selection.
+      initialLocation: AppRoutePaths.selectUser,
       debugLogDiagnostics: true,
       redirect: _redirect,
       refreshListenable: refreshListenable,
@@ -286,71 +292,70 @@ class AppRouter {
     }
     // --- END FIX ---
 
-    final isLoggingIn = (location == AppRoutePaths.citizenLogin ||
-        location == AppRoutePaths.citizenRegister ||
+    final isPublicPath = (location == AppRoutePaths.citizenLogin ||
         location == AppRoutePaths.citizenAuthIntro ||
         location == AppRoutePaths.citizenIntroSlides ||
         location == AppRoutePaths.selectUser ||
-        location == AppRoutePaths.operatorLogin);
+        location == AppRoutePaths.operatorLogin ||
+        location == AppRoutePaths.driverLogin ||
+        location == AppRoutePaths.driverHome ||
+        location == AppRoutePaths.adminHome);
 
     // 2. If user is authenticated
     if (authState is AuthStateAuthenticated) {
-      if (isLoggingIn || onSplash) {
-        if (authState.role == UserRole.citizen) {
+      final role = authState.role;
+      final onCitizenPublic =
+          location == AppRoutePaths.citizenLogin || location == AppRoutePaths.citizenAuthIntro;
+      final onCitizenIntro = location == AppRoutePaths.citizenIntroSlides ||
+          location == AppRoutePaths.selectUser;
+
+      if (role == UserRole.citizen) {
+        if (onSplash || onCitizenPublic || onCitizenIntro) {
           return AppRoutePaths.citizenHome;
         }
-        // Fallback for any other authenticated role
-        return AppRoutePaths.citizenHome;
+        return null;
       }
+
+      if (role == UserRole.operator) {
+        if (onSplash || onCitizenPublic || onCitizenIntro) {
+          return '/operator-home';
+        }
+        return null;
+      }
+
+      if (role == UserRole.driver) {
+        if (onSplash || onCitizenPublic || onCitizenIntro) {
+          return AppRoutePaths.driverHome;
+        }
+        return null;
+      }
+
+      if (role == UserRole.admin) {
+        if (onSplash || onCitizenPublic || onCitizenIntro) {
+          return AppRoutePaths.adminHome;
+        }
+        return null;
+      }
+
       return null;
     }
 
     // 3. If user is UNauthenticated
     if (authState is AuthStateUnauthenticated ||
         authState is AuthStateFailure) {
-      if (onSplash) {
-        return AppRoutePaths.selectUser;
-      }
-      if (isLoggingIn) {
-        return null;
-      }
+      if (onSplash) return AppRoutePaths.selectUser;
+      if (isPublicPath) return null;
       return AppRoutePaths.selectUser;
     }
 
     return null;
   }
 
-  CustomTransitionPage<void> _buildTransitionPage(
-      GoRouterState state, Widget child) {
-    return CustomTransitionPage<void>(
+  Page<void> _buildTransitionPage(GoRouterState state, Widget child) {
+    return MaterialPage<void>(
       key: state.pageKey,
+      maintainState: true,
       child: child,
-      transitionDuration: const Duration(milliseconds: 320),
-      reverseTransitionDuration: const Duration(milliseconds: 280),
-      transitionsBuilder:
-          (context, animation, secondaryAnimation, transitionChild) {
-        final curvedAnimation = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        );
-        final slideAnimation = Tween<Offset>(
-          begin: const Offset(0.9, 0),
-          end: Offset.zero,
-        ).animate(curvedAnimation);
-        final fadeAnimation = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeInOut,
-        );
-
-        return SlideTransition(
-          position: slideAnimation,
-          child: FadeTransition(
-            opacity: fadeAnimation,
-            child: transitionChild,
-          ),
-        );
-      },
     );
   }
 }

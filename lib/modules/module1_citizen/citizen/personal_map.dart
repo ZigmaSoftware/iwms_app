@@ -35,6 +35,8 @@ class _CitizenPersonalMapScreenState extends State<CitizenPersonalMapScreen> {
   List<SitePolygon> _sites = const [];
   bool _loadingSites = true;
   LatLng? _lastCameraTarget;
+  VehicleModel? _selectedVehicle;
+  bool _showVehicleDetails = false;
 
   @override
   void initState() {
@@ -95,6 +97,17 @@ class _CitizenPersonalMapScreenState extends State<CitizenPersonalMapScreen> {
 
             _moveCameraOnce(cameraTarget);
 
+            // Keep the selection in sync with the latest data.
+            if (_selectedVehicle != null) {
+              final stillPresent = filteredVehicles.any(
+                (v) => v.id == _selectedVehicle!.id,
+              );
+              if (!stillPresent && _showVehicleDetails) {
+                _selectedVehicle = null;
+                _showVehicleDetails = false;
+              }
+            }
+
             final showLoader = _loadingSites ||
                 state is VehicleLoading ||
                 state is VehicleInitial;
@@ -122,8 +135,8 @@ class _CitizenPersonalMapScreenState extends State<CitizenPersonalMapScreen> {
                   ),
                 ),
                 if (showEmptyState) _buildEmptyState(context),
-                if (filteredVehicles.isNotEmpty)
-                  _buildVehicleInfo(context, filteredVehicles.first),
+                if (_showVehicleDetails && _selectedVehicle != null)
+                  _buildVehicleInfo(context, _selectedVehicle!),
                 if (showLoader)
                   const Center(
                     child: CircularProgressIndicator(),
@@ -155,13 +168,22 @@ class _CitizenPersonalMapScreenState extends State<CitizenPersonalMapScreen> {
     final markers = vehicles
         .map(
           (vehicle) => Marker(
-            width: 100,
-            height: 110,
+            width: 70,
+            height: 70,
             point: LatLng(vehicle.latitude, vehicle.longitude),
-            child: _PersonalVehicleMarker(
-              vehicle: vehicle,
-              statusColor:
-                  context.read<VehicleBloc>().getStatusColor(vehicle.status),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                setState(() {
+                  _selectedVehicle = vehicle;
+                  _showVehicleDetails = true;
+                });
+              },
+              child: _PersonalVehicleMarker(
+                vehicle: vehicle,
+                statusColor:
+                    context.read<VehicleBloc>().getStatusColor(vehicle.status),
+              ),
             ),
           ),
         )
@@ -184,6 +206,11 @@ class _CitizenPersonalMapScreenState extends State<CitizenPersonalMapScreen> {
         interactionOptions: const InteractionOptions(
           flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
         ),
+        onTap: (_, __) {
+          setState(() {
+            _showVehicleDetails = false;
+          });
+        },
       ),
       children: [
         TileLayer(
@@ -206,14 +233,15 @@ class _CitizenPersonalMapScreenState extends State<CitizenPersonalMapScreen> {
     final statusColor =
         context.read<VehicleBloc>().getStatusColor(vehicle.status);
     return Positioned(
-      bottom: 20,
+      bottom: 14,
       left: 16,
       right: 16,
-      child: Card(
-        elevation: 8,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Material(
+        elevation: 14,
+        borderRadius: BorderRadius.circular(16),
+        shadowColor: Colors.black.withValues(alpha: 0.18),
         child: Padding(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(14),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -225,29 +253,32 @@ class _CitizenPersonalMapScreenState extends State<CitizenPersonalMapScreen> {
                       vehicle.registrationNumber ?? 'Unknown vehicle',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
+                        fontSize: 16,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: statusColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       (vehicle.status ?? 'N/A').toUpperCase(),
                       style: TextStyle(
                         color: statusColor,
                         fontWeight: FontWeight.w700,
-                        fontSize: 12,
+                        fontSize: 11,
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
-              if ((vehicle.driverName ?? '').isNotEmpty)
+              if ((vehicle.driverName ?? '').isNotEmpty) ...[
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     Icon(Icons.person_outline,
@@ -257,13 +288,15 @@ class _CitizenPersonalMapScreenState extends State<CitizenPersonalMapScreen> {
                       child: Text(
                         vehicle.driverName!,
                         style: theme.textTheme.bodyMedium,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
-              if ((vehicle.driverName ?? '').isNotEmpty)
-                const SizedBox(height: 10),
-              if ((vehicle.address ?? '').isNotEmpty)
+              ],
+              if ((vehicle.address ?? '').isNotEmpty) ...[
+                const SizedBox(height: 8),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -274,13 +307,16 @@ class _CitizenPersonalMapScreenState extends State<CitizenPersonalMapScreen> {
                       child: Text(
                         vehicle.address!,
                         style: theme.textTheme.bodyMedium,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
-              const SizedBox(height: 12),
+              ],
+              const SizedBox(height: 8),
               Wrap(
-                spacing: 16,
+                spacing: 12,
                 runSpacing: 8,
                 children: [
                   _InfoChip(
@@ -575,50 +611,23 @@ class _PersonalVehicleMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.15),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
-              ),
-            ],
+    return Container(
+      width: 54,
+      height: 54,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: statusColor.withValues(alpha: 0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
-          child: Column(
-            children: [
-              Icon(Icons.local_shipping_outlined, color: statusColor, size: 26),
-              const SizedBox(height: 4),
-              Text(
-                vehicle.registrationNumber ?? 'N/A',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              Text(
-                vehicle.status ?? 'N/A',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: statusColor,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          width: 2,
-          height: 12,
-          color: statusColor,
-        ),
-        Icon(Icons.place, color: statusColor, size: 20),
-      ],
+        ],
+      ),
+      child: Image.asset(
+        'assets/images/marker.png',
+        fit: BoxFit.contain,
+      ),
     );
   }
 }

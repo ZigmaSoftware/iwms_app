@@ -6,6 +6,7 @@ enum UserRole {
   unauthenticated,
   citizen,
   operator,
+  driver,
   supervisor,
   engineer,
   admin,
@@ -42,6 +43,21 @@ class AuthStateAuthenticatedCitizen extends AuthStateAuthenticated {
       : super(role: UserRole.citizen);
 }
 
+class AuthStateAuthenticatedOperator extends AuthStateAuthenticated {
+  const AuthStateAuthenticatedOperator({required super.userName})
+      : super(role: UserRole.operator);
+}
+
+class AuthStateAuthenticatedDriver extends AuthStateAuthenticated {
+  const AuthStateAuthenticatedDriver({required super.userName})
+      : super(role: UserRole.driver);
+}
+
+class AuthStateAuthenticatedAdmin extends AuthStateAuthenticated {
+  const AuthStateAuthenticatedAdmin({required super.userName})
+      : super(role: UserRole.admin);
+}
+
 class AuthStateFailure extends AuthState {
   final String message;
 
@@ -49,9 +65,4 @@ class AuthStateFailure extends AuthState {
 
   @override
   List<Object?> get props => [role, userName, message];
-}
-class AuthStateAuthenticatedOperator extends AuthState {
-  final String userName;
-
-  const AuthStateAuthenticatedOperator({required this.userName});
 }
