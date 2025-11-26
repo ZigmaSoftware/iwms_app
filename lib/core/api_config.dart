@@ -32,7 +32,8 @@ class ApiConfig {
   static const String citizenRegister = '${_legacyBase}citizen_register.php';
 
   /// Django backend endpoint for citizen authentication.
-  static const String _defaultCitizenLogin = '${_localMobileBase}customer/login/';
+  // static const String _defaultCitizenLogin = '${_localMobileBase}customer/login/';
+   static const String _defaultCitizenLogin = '${_localMobileBase}login/';
   static const String citizenLogin =
       String.fromEnvironment('CITIZEN_LOGIN_URL', defaultValue: _defaultCitizenLogin);
 

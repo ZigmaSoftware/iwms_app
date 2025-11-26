@@ -291,77 +291,127 @@ class AppRouter {
     );
   }
 
-  // --- Redirect Logic ---
-  String? _redirect(BuildContext context, GoRouterState state) {
-    final authState = authBloc.state;
-    final location = state.matchedLocation;
-    final onSplash = location == AppRoutePaths.splash;
+  // // --- Redirect Logic ---
+  // String? _redirect(BuildContext context, GoRouterState state) {
+  //   final authState = authBloc.state;
+  //   final location = state.matchedLocation;
+  //   final onSplash = location == AppRoutePaths.splash;
 
-    // --- THIS IS THE FIX ---
-    // 1. While app is initializing OR a login is in progress, stay put.
-    if (authState is AuthStateInitial || authState is AuthStateLoading) {
-      return null;
-    }
-    // --- END FIX ---
+  //   // --- THIS IS THE FIX ---
+  //   // 1. While app is initializing OR a login is in progress, stay put.
+  //   if (authState is AuthStateInitial || authState is AuthStateLoading) {
+  //     return null;
+  //   }
+  //   // --- END FIX ---
 
-    final isPublicPath = (location == AppRoutePaths.citizenLogin ||
-        location == AppRoutePaths.citizenAuthIntro ||
-        location == AppRoutePaths.citizenIntroSlides ||
-        location == AppRoutePaths.selectUser ||
-        location == AppRoutePaths.operatorLogin ||
-        location == AppRoutePaths.driverLogin ||
-        location == AppRoutePaths.driverHome ||
-        location == AppRoutePaths.adminHome);
+  //   final isPublicPath = (location == AppRoutePaths.citizenLogin ||
+  //       location == AppRoutePaths.citizenAuthIntro ||
+  //       location == AppRoutePaths.citizenIntroSlides ||
+  //       location == AppRoutePaths.selectUser ||
+  //       location == AppRoutePaths.operatorLogin ||
+  //       location == AppRoutePaths.driverLogin ||
+  //       location == AppRoutePaths.driverHome ||
+  //       location == AppRoutePaths.adminHome);
 
-    // 2. If user is authenticated
-    if (authState is AuthStateAuthenticated) {
-      final role = authState.role;
-      final onCitizenPublic =
-          location == AppRoutePaths.citizenLogin || location == AppRoutePaths.citizenAuthIntro;
-      final onCitizenIntro = location == AppRoutePaths.citizenIntroSlides ||
-          location == AppRoutePaths.selectUser;
+  //   // 2. If user is authenticated
+  //   if (authState is AuthStateAuthenticated) {
+  //     final role = authState.role;
+  //     final onCitizenPublic =
+  //         location == AppRoutePaths.citizenLogin || location == AppRoutePaths.citizenAuthIntro;
+  //     final onCitizenIntro = location == AppRoutePaths.citizenIntroSlides ||
+  //         location == AppRoutePaths.selectUser;
 
-      if (role == UserRole.citizen) {
-        if (onSplash || onCitizenPublic || onCitizenIntro) {
-          return AppRoutePaths.citizenHome;
-        }
-        return null;
-      }
+  //     if (role == UserRole.citizen) {
+  //       if (onSplash || onCitizenPublic || onCitizenIntro) {
+  //         return AppRoutePaths.citizenHome;
+  //       }
+  //       return null;
+  //     }
 
-      if (role == UserRole.operator) {
-        if (onSplash || onCitizenPublic || onCitizenIntro) {
-          return '/operator-home';
-        }
-        return null;
-      }
+  //     if (role == UserRole.operator) {
+  //       if (onSplash || onCitizenPublic || onCitizenIntro) {
+  //         return '/operator-home';
+  //       }
+  //       return null;
+  //     }
 
-      if (role == UserRole.driver) {
-        if (onSplash || onCitizenPublic || onCitizenIntro) {
-          return AppRoutePaths.driverHome;
-        }
-        return null;
-      }
+  //     if (role == UserRole.driver) {
+  //       if (onSplash || onCitizenPublic || onCitizenIntro) {
+  //         return AppRoutePaths.driverHome;
+  //       }
+  //       return null;
+  //     }
 
-      if (role == UserRole.admin) {
-        if (onSplash || onCitizenPublic || onCitizenIntro) {
-          return AppRoutePaths.adminHome;
-        }
-        return null;
-      }
+  //     if (role == UserRole.admin) {
+  //       if (onSplash || onCitizenPublic || onCitizenIntro) {
+  //         return AppRoutePaths.adminHome;
+  //       }
+  //       return null;
+  //     }
 
-      return null;
-    }
+  //     return null;
+  //   }
 
-    // 3. If user is UNauthenticated
-    if (authState is AuthStateUnauthenticated ||
-        authState is AuthStateFailure) {
-      if (onSplash) return AppRoutePaths.selectUser;
-      if (isPublicPath) return null;
-      return AppRoutePaths.selectUser;
-    }
+  //   // 3. If user is UNauthenticated
+  //   if (authState is AuthStateUnauthenticated ||
+  //       authState is AuthStateFailure) {
+  //     if (onSplash) return AppRoutePaths.selectUser;
+  //     if (isPublicPath) return null;
+  //     return AppRoutePaths.selectUser;
+  //   }
 
+  //   return null;
+  // }
+String? _redirect(BuildContext context, GoRouterState state) {
+  final authState = authBloc.state;
+  final location = state.matchedLocation;
+
+  // 1) Initialization / loading → stay where you are
+  if (authState is AuthStateInitial || authState is AuthStateLoading) {
     return null;
   }
+
+  // 2) Public-only routes (anyone can access)
+  final isPublic = [
+    AppRoutePaths.citizenLogin,
+    AppRoutePaths.citizenAuthIntro,
+    AppRoutePaths.citizenIntroSlides,
+    AppRoutePaths.selectUser,
+    AppRoutePaths.operatorLogin,
+    AppRoutePaths.driverLogin,
+  ].contains(location);
+
+  // 3) Authenticated user routing
+  if (authState is AuthStateAuthenticated) {
+    final role = authState.role;
+
+    switch (role) {
+      case UserRole.citizen:
+        return isPublic ? AppRoutePaths.citizenHome : null;
+
+      case UserRole.operator:
+        return isPublic ? '/operator-home' : null;
+
+      case UserRole.driver:
+        return isPublic ? AppRoutePaths.driverHome : null;
+
+      case UserRole.admin:
+        return isPublic ? AppRoutePaths.adminHome : null;
+
+      default:
+        return AppRoutePaths.selectUser;
+    }
+  }
+
+  // 4) Unauthenticated user → must go to public screens only
+  if (authState is AuthStateUnauthenticated ||
+      authState is AuthStateFailure) {
+    if (isPublic) return null;
+    return AppRoutePaths.selectUser;
+  }
+
+  return null;
+}
 
   Page<void> _buildTransitionPage(GoRouterState state, Widget child) {
     return MaterialPage<void>(

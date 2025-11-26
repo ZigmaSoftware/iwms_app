@@ -49,70 +49,114 @@ class AuthRepository {
   }) async =>
       throw UnimplementedError('Remote registration disabled in demo build.');
 
-  Future<UserModel> loginCitizen({
-    required String username,
-    required String password,
-    String? userType,
-  }) async {
-    final sanitizedUsername = username.trim();
-    if (sanitizedUsername.isEmpty) {
-      throw AuthRepositoryException('Please enter a valid phone number or username.');
-    }
-    if (password.isEmpty) {
-      throw AuthRepositoryException('Password is required.');
-    }
+  // Future<UserModel> loginCitizen({
+  //   required String username,
+  //   required String password,
+  //   String? userType,
+  // }) async {
+  //   final sanitizedUsername = username.trim();
+  //   if (sanitizedUsername.isEmpty) {
+  //     throw AuthRepositoryException('Please enter a valid phone number or username.');
+  //   }
+  //   if (password.isEmpty) {
+  //     throw AuthRepositoryException('Password is required.');
+  //   }
 
-    final resolvedUserType =
-        (userType?.trim().isNotEmpty ?? false) ? userType!.trim() : ApiConfig.citizenUserType;
-    try {
-      final response = await _dio.post(
-        ApiConfig.citizenLogin,
-        data: {
-          'user_type': resolvedUserType,
-          'username': sanitizedUsername,
-          'password': password,
-        },
-      );
+  //   final resolvedUserType =
+  //       (userType?.trim().isNotEmpty ?? false) ? userType!.trim() : ApiConfig.citizenUserType;
+  //   try {
+  //     final response = await _dio.post(
+  //       ApiConfig.citizenLogin,
+  //       data: {
+  //         'user_type': resolvedUserType,
+  //         'username': sanitizedUsername,
+  //         'password': password,
+  //       },
+  //     );
 
-      final payload = response.data;
-      if (payload is! Map<String, dynamic>) {
-        throw AuthRepositoryException('Unexpected response from server.');
-      }
+  //     final payload = response.data;
+  //     if (payload is! Map<String, dynamic>) {
+  //       throw AuthRepositoryException('Unexpected response from server.');
+  //     }
 
-      final success = payload['status'] == true;
-      if (!success) {
-        final message = _extractServerMessage(payload) ?? 'Unable to login with the provided details.';
-        throw AuthRepositoryException(message);
-      }
+  //     final success = payload['status'] == true;
+  //     if (!success) {
+  //       final message = _extractServerMessage(payload) ?? 'Unable to login with the provided details.';
+  //       throw AuthRepositoryException(message);
+  //     }
 
-      final token = payload['token']?.toString();
-      final userMap = payload['user'];
-      final userData = userMap is Map<String, dynamic> ? userMap : <String, dynamic>{};
-      final usernameFromApi = _stringOrNull(userData['username']) ?? sanitizedUsername;
+  //     final token = payload['token']?.toString();
+  //     final userMap = payload['user'];
+  //     final userData = userMap is Map<String, dynamic> ? userMap : <String, dynamic>{};
+  //     final usernameFromApi = _stringOrNull(userData['username']) ?? sanitizedUsername;
 
-      final displayName = _buildDisplayName(
-        firstName: _stringOrNull(userData['first_name']),
-        lastName: _stringOrNull(userData['last_name']),
-        fallback: usernameFromApi,
-      );
+  //     final displayName = _buildDisplayName(
+  //       firstName: _stringOrNull(userData['first_name']),
+  //       lastName: _stringOrNull(userData['last_name']),
+  //       fallback: usernameFromApi,
+  //     );
 
-      return UserModel(
-        userId: usernameFromApi,
-        userName: displayName,
-        role: 'citizen',
-        authToken: token?.isNotEmpty == true ? token : null,
-      );
-    } on AuthRepositoryException {
-      rethrow;
-    } on DioException catch (dioError, stackTrace) {
-      final message = _handleDioError(dioError);
-      _logError('Citizen login failed', dioError, stackTrace);
-      throw AuthRepositoryException(message);
-    } catch (error, stackTrace) {
-      _logError('Unexpected citizen login failure', error, stackTrace);
-      throw AuthRepositoryException('Unexpected error occurred. Please try again.');
-    }
+  //     return UserModel(
+  //       userId: usernameFromApi,
+  //       userName: displayName,
+  //       role: 'citizen',
+  //       authToken: token?.isNotEmpty == true ? token : null,
+  //     );
+  //   } on AuthRepositoryException {
+  //     rethrow;
+  //   } on DioException catch (dioError, stackTrace) {
+  //     final message = _handleDioError(dioError);
+  //     _logError('Citizen login failed', dioError, stackTrace);
+  //     throw AuthRepositoryException(message);
+  //   } catch (error, stackTrace) {
+  //     _logError('Unexpected citizen login failure', error, stackTrace);
+  //     throw AuthRepositoryException('Unexpected error occurred. Please try again.');
+  //   }
+  // }
+Future<UserModel> loginCitizen({
+  required String username,
+  required String password,
+}) async {
+  if (username.trim().isEmpty) {
+    throw AuthRepositoryException("Username is required.");
   }
+  if (password.trim().isEmpty) {
+    throw AuthRepositoryException("Password is required.");
+  }
+
+  try {
+    final response = await _dio.post(
+      ApiConfig.citizenLogin,
+      data: {
+        "username": username.trim(),
+        "password": password.trim(),
+      },
+    );
+
+    debugPrint("API Login Response: ${response.data}");
+
+    // The server returns SUCCESS always with no "status" flag.
+    // Validate essential fields manually.
+    final data = response.data;
+
+    if (data["unique_id"] == null ||
+        data["role"] == null ||
+        data["name"] == null ||
+        data["access_token"] == null) {
+      throw AuthRepositoryException("Invalid login response from server.");
+    }
+
+    // Convert to model
+    final user = UserModel.fromApi(data);
+
+    // Save user to SharedPreferences
+    await saveUser(user);
+
+    return user;
+  } catch (e) {
+    throw AuthRepositoryException("Login failed. Please try again.");
+  }
+}
 
   Future<UserModel> loginDriver({
     required String userName,

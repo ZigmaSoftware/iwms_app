@@ -289,7 +289,7 @@ class _LoginCard extends StatelessWidget {
                   children: [
                     TextFormField(
                       controller: phoneController,
-                      keyboardType: TextInputType.phone,
+                      keyboardType: TextInputType.text,
                       decoration: inputDecorationBuilder(
                         label: 'Phone / Username',
                         hint: 'Enter your registered phone or username',

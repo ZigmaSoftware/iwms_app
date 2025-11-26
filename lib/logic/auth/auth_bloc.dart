@@ -53,27 +53,69 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
-  Future<void> _onCitizenLoginRequested(
-    AuthCitizenLoginRequested event,
-    Emitter<AuthState> emit,
-  ) async {
-    emit(const AuthStateLoading());
-    try {
-      final user = await _authRepository.loginCitizen(
-        username: event.username,
-        password: event.password,
-        userType: event.userType,
-      );
-      await _authRepository.saveUser(user);
-      emit(AuthStateAuthenticatedCitizen(userName: user.userName));
-    } on AuthRepositoryException catch (error) {
-      emit(AuthStateFailure(message: error.message));
-      emit(const AuthStateUnauthenticated());
-    } catch (_) {
-      emit(const AuthStateFailure(message: 'Unable to login. Please try again.'));
-      emit(const AuthStateUnauthenticated());
-    }
+  // Future<void> _onCitizenLoginRequested(
+  //   AuthCitizenLoginRequested event,
+  //   Emitter<AuthState> emit,
+  // ) async {
+  //   emit(const AuthStateLoading());
+  //   try {
+  //     final user = await _authRepository.loginCitizen(
+  //       username: event.username,
+  //       password: event.password,
+  //       // userType: event.userType,
+  //     );
+  //     await _authRepository.saveUser(user);
+  //     emit(AuthStateAuthenticatedCitizen(userName: user.userName));
+  //   } on AuthRepositoryException catch (error) {
+  //     emit(AuthStateFailure(message: error.message));
+  //     emit(const AuthStateUnauthenticated());
+  //   } catch (_) {
+  //     emit(const AuthStateFailure(message: 'Unable to login. Please try again.'));
+  //     emit(const AuthStateUnauthenticated());
+  //   }
+  // }
+Future<void> _onCitizenLoginRequested(
+  AuthCitizenLoginRequested event,
+  Emitter<AuthState> emit,
+) async {
+  emit(const AuthStateLoading());
+
+  try {
+    final user = await _authRepository.loginCitizen(
+      username: event.username,
+      password: event.password,
+    );
+
+    switch (user.role) {
+  case "customer":
+  case "citizen":
+    emit(AuthStateAuthenticatedCitizen(userName: user.userName));
+    break;
+
+  case "operator":
+    emit(AuthStateAuthenticatedOperator(userName: user.userName));
+    break;
+
+  case "driver":
+    emit(AuthStateAuthenticatedDriver(userName: user.userName));
+    break;
+
+  case "admin":
+    emit(AuthStateAuthenticatedAdmin(userName: user.userName));
+    break;
+
+  default:
+    emit(const AuthStateFailure(message: "Unknown user role"));
+    emit(const AuthStateUnauthenticated());
+    break;
+}
+
+  } 
+  catch (e) {
+    emit(AuthStateFailure(message: e.toString()));
+    emit(const AuthStateUnauthenticated());
   }
+}
 
   Future<void> _onCitizenRegisterRequested(
     AuthCitizenRegisterRequested event,
