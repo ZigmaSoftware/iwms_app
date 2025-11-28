@@ -82,11 +82,6 @@ class AppRouter {
             _buildTransitionPage(state, const SplashScreen()),
       ),
       GoRoute(
-        path: AppRoutePaths.selectUser,
-        pageBuilder: (context, state) =>
-            _buildTransitionPage(state, const UserSelectionScreen()),
-      ),
-      GoRoute(
         path: AppRoutePaths.citizenIntroSlides,
         pageBuilder: (context, state) =>
             _buildTransitionPage(state, const CitizenIntroSlidesScreen()),
@@ -283,7 +278,7 @@ class AppRouter {
     router = GoRouter(
       routes: _routes,
       // Skip the splash screen to avoid startup crashes; land on role selection.
-      initialLocation: AppRoutePaths.selectUser,
+      initialLocation: AppRoutePaths.citizenIntroSlides,
       debugLogDiagnostics: true,
       redirect: _redirect,
       refreshListenable: refreshListenable,
@@ -376,7 +371,6 @@ String? _redirect(BuildContext context, GoRouterState state) {
     AppRoutePaths.citizenLogin,
     AppRoutePaths.citizenAuthIntro,
     AppRoutePaths.citizenIntroSlides,
-    AppRoutePaths.selectUser,
     AppRoutePaths.operatorLogin,
     AppRoutePaths.driverLogin,
   ].contains(location);
@@ -399,7 +393,7 @@ String? _redirect(BuildContext context, GoRouterState state) {
         return isPublic ? AppRoutePaths.adminHome : null;
 
       default:
-        return AppRoutePaths.selectUser;
+        return AppRoutePaths.citizenLogin;
     }
   }
 
@@ -407,7 +401,7 @@ String? _redirect(BuildContext context, GoRouterState state) {
   if (authState is AuthStateUnauthenticated ||
       authState is AuthStateFailure) {
     if (isPublic) return null;
-    return AppRoutePaths.selectUser;
+    return AppRoutePaths.citizenLogin;
   }
 
   return null;
