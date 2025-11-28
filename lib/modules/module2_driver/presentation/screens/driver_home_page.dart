@@ -395,7 +395,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   void _logout(BuildContext context) {
     if (!mounted) return;
-    context.go(AppRoutePaths.selectUser);
+    context.go(AppRoutePaths.citizenLogin);
   }
 
 }

@@ -158,7 +158,7 @@ class _OperatorHomePageState extends State<OperatorHomePage> {
                       onPressed: () {
                         Navigator.of(sheetContext).maybePop();
                         if (!mounted) return;
-                        context.go(AppRoutePaths.operatorLogin);
+                        context.go(AppRoutePaths.citizenLogin);
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _operatorPrimary,

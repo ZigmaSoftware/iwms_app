@@ -211,7 +211,7 @@ Future<void> _handleLogin() async {
           context.read<AuthBloc>().add(AuthLogoutRequested());
           Future.microtask(() {
             if (mounted) {
-              context.go(AppRoutePaths.selectUser);
+              context.go(AppRoutePaths.citizenLogin);
             }
           });
         }

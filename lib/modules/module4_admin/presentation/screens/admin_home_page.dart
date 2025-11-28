@@ -81,7 +81,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
   void _logout(BuildContext context) {
     context.read<AuthBloc>().add(AuthLogoutRequested());
-    context.go(AppRoutePaths.selectUser);
+    context.go(AppRoutePaths.citizenLogin);
   }
 
   String _tabLabel(_AdminTab tab) {

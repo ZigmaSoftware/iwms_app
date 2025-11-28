@@ -1676,7 +1676,7 @@ class MoreScreen extends StatelessWidget {
         'Logout',
         onTap: () {
           context.read<AuthBloc>().add(AuthLogoutRequested());
-          context.go(AppRoutePaths.selectUser);
+          context.go(AppRoutePaths.citizenLogin);
         },
       ),
     ];

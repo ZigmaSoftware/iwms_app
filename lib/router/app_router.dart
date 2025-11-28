@@ -81,6 +81,7 @@ class AppRouter {
         pageBuilder: (context, state) =>
             _buildTransitionPage(state, const SplashScreen()),
       ),
+
       GoRoute(
         path: AppRoutePaths.citizenIntroSlides,
         pageBuilder: (context, state) =>
