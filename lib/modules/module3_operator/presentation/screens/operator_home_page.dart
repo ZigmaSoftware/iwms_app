@@ -5,6 +5,9 @@ import 'package:motion_tab_bar/MotionTabBar.dart';
 
 import 'package:iwms_citizen_app/router/app_router.dart';
 import 'operator_qr_scanner.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 
 const Color _operatorPrimary = Color(0xFF1B5E20);
 const Color _operatorAccent = Color(0xFF66BB6A);
@@ -158,7 +161,8 @@ class _OperatorHomePageState extends State<OperatorHomePage> {
                       onPressed: () {
                         Navigator.of(sheetContext).maybePop();
                         if (!mounted) return;
-                        context.go(AppRoutePaths.citizenLogin);
+                        context.read<AuthBloc>().add(AuthLogoutRequested());
+                        // context.go(AppRoutePaths.citizenLogin);
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _operatorPrimary,

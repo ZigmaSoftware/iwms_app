@@ -1,68 +1,47 @@
-// lib/logic/auth/auth_state.dart
 import 'package:equatable/equatable.dart';
 
-enum UserRole {
-  unknown,
-  unauthenticated,
-  citizen,
-  operator,
-  driver,
-  supervisor,
-  engineer,
-  admin,
-}
-
-class AuthState extends Equatable {
-  final UserRole role;
-  final String? userName;
-
-  const AuthState({this.role = UserRole.unknown, this.userName});
+abstract class AuthState extends Equatable {
+  const AuthState();
 
   @override
-  List<Object?> get props => [role, userName];
+  List<Object?> get props => [];
 }
 
+/// App starting / checking persistence
 class AuthStateInitial extends AuthState {
-  const AuthStateInitial() : super(role: UserRole.unknown);
+  const AuthStateInitial();
 }
 
+/// Any ongoing login or async process
 class AuthStateLoading extends AuthState {
-  const AuthStateLoading() : super(role: UserRole.unknown);
+  const AuthStateLoading();
 }
 
+/// Unified authenticated state
+class AuthStateAuthenticated extends AuthState {
+  final String userName;
+  final String role; // citizen, operator, driver, admin
+
+  const AuthStateAuthenticated({
+    required this.userName,
+    required this.role,
+  });
+
+  @override
+  List<Object?> get props => [userName, role];
+}
+
+/// Logged out
 class AuthStateUnauthenticated extends AuthState {
-  const AuthStateUnauthenticated() : super(role: UserRole.unauthenticated);
+  const AuthStateUnauthenticated();
 }
 
-abstract class AuthStateAuthenticated extends AuthState {
-  const AuthStateAuthenticated({required super.role, required String super.userName});
-}
-
-class AuthStateAuthenticatedCitizen extends AuthStateAuthenticated {
-  const AuthStateAuthenticatedCitizen({required super.userName})
-      : super(role: UserRole.citizen);
-}
-
-class AuthStateAuthenticatedOperator extends AuthStateAuthenticated {
-  const AuthStateAuthenticatedOperator({required super.userName})
-      : super(role: UserRole.operator);
-}
-
-class AuthStateAuthenticatedDriver extends AuthStateAuthenticated {
-  const AuthStateAuthenticatedDriver({required super.userName})
-      : super(role: UserRole.driver);
-}
-
-class AuthStateAuthenticatedAdmin extends AuthStateAuthenticated {
-  const AuthStateAuthenticatedAdmin({required super.userName})
-      : super(role: UserRole.admin);
-}
-
+/// Login failure
 class AuthStateFailure extends AuthState {
   final String message;
 
-  const AuthStateFailure({required this.message}) : super(role: UserRole.unknown);
+  const AuthStateFailure({required this.message});
 
   @override
-  List<Object?> get props => [role, userName, message];
+  List<Object?> get props => [message];
 }

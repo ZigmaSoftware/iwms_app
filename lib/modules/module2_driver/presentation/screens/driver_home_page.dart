@@ -13,6 +13,9 @@ import '../../../../logic/vehicle_tracking/vehicle_bloc.dart';
 import '../../../../logic/vehicle_tracking/vehicle_event.dart';
 import '../../../../router/app_router.dart';
 import 'package:iwms_citizen_app/shared/widgets/tracking_view_shell.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 
 const Color _driverPrimary = Color(0xFF1B5E20);
 const Color _driverAccent = Color(0xFF66BB6A);
@@ -395,7 +398,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   void _logout(BuildContext context) {
     if (!mounted) return;
-    context.go(AppRoutePaths.citizenLogin);
+    context.read<AuthBloc>().add(AuthLogoutRequested());
   }
 
 }
