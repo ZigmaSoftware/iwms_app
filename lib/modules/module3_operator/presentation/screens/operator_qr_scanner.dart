@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-import 'package:iwms_citizen_app/modules/module3_operator/services/location_service.dart';
-
-const Color _operatorPrimary = Color(0xFF1B5E20);
+import 'package:iwms_citizen_app/modules/module3_operator/services/locationservices.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_data_screen.dart';
+import 'package:iwms_citizen_app/router/app_router.dart';
 
 class OperatorQRScanner extends StatefulWidget {
   const OperatorQRScanner({super.key});
@@ -14,8 +14,9 @@ class OperatorQRScanner extends StatefulWidget {
 }
 
 class _OperatorQRScannerState extends State<OperatorQRScanner> {
-  final MobileScannerController _cameraController = MobileScannerController();
-  bool _isScanning = true;
+  final MobileScannerController _camera = MobileScannerController();
+
+  bool _scanned = false;
   bool _locationReady = false;
 
   @override
@@ -24,137 +25,123 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
     _initLocation();
   }
 
+  /// ---------------------------------------------------------
+  /// 🔥 Ensure location is ready BEFORE scanning
+  /// ---------------------------------------------------------
   Future<void> _initLocation() async {
     try {
-      await OperatorLocationService.refresh();
-      if (mounted) {
-        setState(() => _locationReady = true);
-      }
+      await LocationService.refresh();
+      setState(() => _locationReady = true);
+      print("📍 Location ready: ${LocationService.latitude}, ${LocationService.longitude}");
     } catch (e) {
-      if (mounted) {
-        setState(() => _locationReady = false);
-      }
+      print("⚠ Location failed: $e");
+      setState(() => _locationReady = false);
     }
   }
 
-  // void _handleDetection(BarcodeCapture capture) async {
-  //   if (!_isScanning) return;
-  //   if (!_locationReady) {
-  //     if (mounted) {
-  //       ScaffoldMessenger.of(context).showSnackBar(
-  //         const SnackBar(content: Text("Fetching location... please wait")),
-  //       );
-  //     }
-  //     return;
-  //   }
+  /// ---------------------------------------------------------
+  /// 🔥 On QR Detected
+  /// ---------------------------------------------------------
+  void _handleQR(BarcodeCapture capture) async {
+    if (_scanned) return; // prevents double scan
 
-  //   final barcode = capture.barcodes.first.rawValue ?? '';
-  //   if (barcode.isEmpty) return;
+    if (!_locationReady) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Getting GPS… Please wait")),
+      );
+      return;
+    }
 
-  //   final navigator = Navigator.of(context);
-  //   setState(() => _isScanning = false);
-  //   await _cameraController.stop();
-  //   if (!context.mounted) return;
+    final raw = capture.barcodes.first.rawValue ?? "";
+    if (raw.isEmpty) return;
 
-  //   final parsed = _parseQrData(barcode);
-  //   final customerId = parsed['Customer Id'] ?? 'Unknown';
-  //   final customerName = parsed['Owner Name'] ?? 'Unknown';
-  //   final contactNo = parsed['address'] ?? 'Unknown';
+    setState(() => _scanned = true);
+    await _camera.stop();
 
-  //   final lat = OperatorLocationService.latitude.toString();
-  //   final lon = OperatorLocationService.longitude.toString();
+    final parsed = _parse(raw);
+    final customerId = parsed['Customer Id'] ?? 'Unknown';
+    final customerName = parsed['Owner Name'] ?? 'Unknown';
+    final contactNo = parsed['address'] ?? 'Unknown';
 
-  //   navigator.pushReplacement(
-  //     MaterialPageRoute(
-  //       builder: (_) => OperatorDataScreen(
-  //         customerId: customerId,
-  //         customerName: customerName,
-  //         contactNo: contactNo,
-  //         latitude: lat,
-  //         longitude: lon,
-  //       ),
-  //     ),
-  //   );
-  // }
-void _handleDetection(BarcodeCapture capture) async {
-  if (!_isScanning) return;
-  _isScanning = false;
+    final lat = LocationService.latitude.toString();
+    final lon = LocationService.longitude.toString();
 
-  final raw = capture.barcodes.first.rawValue ?? "";
-  if (raw.isEmpty) return;
+    // ---------------------------------------------------------
+    // 🔥 Go to the data screen VIA ROUTER (not Navigator)
+    // ---------------------------------------------------------
+    if (!mounted) return;
 
-  try {
-    await _cameraController.stop();
-  } catch (_) {}
+    context.go(
+      AppRoutePaths.operatorData,
+      extra: {
+        'customerId': customerId,
+        'customerName': customerName,
+        'contactNo': contactNo,
+        'latitude': lat,
+        'longitude': lon,
+      },
+    );
+  }
 
-  await Future.delayed(const Duration(milliseconds: 120));
+  /// ---------------------------------------------------------
+  /// 🔍 Parse QR Key:Value Pairs
+  /// ---------------------------------------------------------
+  Map<String, String> _parse(String data) {
+    final out = <String, String>{};
 
-  if (!mounted) return;
-
-  final parsed = _parseQrData(raw);
-
-context.push(
-  '/operator-data',
-  extra: {
-    'customerId': parsed['Customer Id'] ?? 'Unknown',
-    'customerName': parsed['Owner Name'] ?? 'Unknown',
-    'contactNo': parsed['address'] ?? 'Unknown',
-    'latitude': OperatorLocationService.latitude.toString(),
-    'longitude': OperatorLocationService.longitude.toString(),
-  },
-);
-
-}
-
-  Map<String, String> _parseQrData(String data) {
-    final map = <String, String>{};
-    for (final line in data.split('\n')) {
+    for (var line in data.split('\n')) {
       final parts = line.split(':');
       if (parts.length == 2) {
-        map[parts[0].trim()] = parts[1].trim();
+        out[parts[0].trim()] = parts[1].trim();
       }
     }
-    return map;
+    return out;
   }
 
   @override
   void dispose() {
-    _cameraController.dispose();
+    _camera.dispose();
     super.dispose();
   }
 
+  /// ---------------------------------------------------------
+  /// UI
+  /// ---------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     if (!_locationReady) {
       return const Scaffold(
         body: Center(
-          child: CircularProgressIndicator(color: _operatorPrimary),
+          child: CircularProgressIndicator(
+            color: Colors.blue,
+          ),
         ),
       );
     }
 
     return Scaffold(
       body: Stack(
-        fit: StackFit.expand,
         children: [
           MobileScanner(
-            controller: _cameraController,
-            onDetect: _handleDetection,
+            controller: _camera,
             fit: BoxFit.cover,
+            onDetect: _handleQR,
           ),
+
+          /// BACK BUTTON
           Positioned(
             top: 40,
-            left: 10,
+            left: 12,
             child: IconButton(
-              icon: const Icon(Icons.cancel, color: Colors.white, size: 28),
-              onPressed: () async {
-                final navigator = Navigator.of(context);
-                await _cameraController.stop();
-                if (!context.mounted) return;
-                navigator.pop();
+              icon: const Icon(Icons.cancel, size: 32, color: Colors.white),
+              onPressed: () {
+                _camera.stop();
+                context.go(AppRoutePaths.operatorHome);
               },
             ),
           ),
+
+          /// FLASH BUTTON
           Positioned(
             bottom: 40,
             left: 0,
@@ -162,21 +149,13 @@ context.push(
             child: Center(
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _operatorPrimary.withOpacity(0.9),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                  backgroundColor: Colors.black54,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 icon: const Icon(Icons.flash_on, color: Colors.white),
-                label: const Text(
-                  "Toggle Flash",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                onPressed: () => _cameraController.toggleTorch(),
+                label: const Text("Toggle Flash"),
+                onPressed: () => _camera.toggleTorch(),
               ),
             ),
           ),
