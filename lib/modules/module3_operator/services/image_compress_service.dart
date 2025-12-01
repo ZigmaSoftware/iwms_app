@@ -1,16 +1,11 @@
 import 'dart:io';
-
 import 'package:flutter_image_compress/flutter_image_compress.dart';
-import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
-class OperatorImageCompressService {
-  static Future<File> compress(
-    File file, {
-    int quality = 60,
-    int minWidth = 800,
-    int minHeight = 600,
-  }) async {
+class ImageCompressService {
+  static Future<File> compress(File file,
+      {int quality = 60, int minWidth = 800, int minHeight = 600}) async {
     try {
       final dir = await getTemporaryDirectory();
       final targetPath =
@@ -25,10 +20,11 @@ class OperatorImageCompressService {
         format: CompressFormat.jpeg,
       );
 
+      // ✅ Always return a File
       return File(result?.path ?? file.path);
     } catch (e) {
-      // Keep the original if compression fails; caller expects a valid file.
-      return file;
+      print('⚠️ Compression error: $e');
+      return file; // fallback to original
     }
   }
 }
