@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io';
+import 'package:iwms_citizen_app/core/di.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/offline/pending_finalize_dao.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/offline/pending_finalize_record.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/bluetoothservices.dart';
@@ -12,6 +13,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:iwms_citizen_app/router/route_observer.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:iwms_citizen_app/shared/models/collection_history.dart';
+import 'package:iwms_citizen_app/shared/services/collection_history_service.dart';
+import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
 import '../../offline/offline_sync_service.dart';
 import '../../offline/pending_record.dart';
 import '../../offline/pending_record_dao.dart';
@@ -49,14 +55,15 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   String? activeType; // currently selected waste type
   late final OfflineSyncService _syncService;
   final PendingRecordDao _pendingDao = PendingRecordDao();
+  late final CollectionHistoryService _historyService;
 
   List<Map<String, dynamic>> wasteTypes = [];
   Map<String, Map<String, dynamic>> _wasteData = {};
   final List<Map<String, dynamic>> defaultWasteTypes = [
-  {"id": 1, "waste_type_name": "Wet"},
-  {"id": 2, "waste_type_name": "Dry"},
-  {"id": 3, "waste_type_name": "Mixed"},
-];
+    {"id": 1, "waste_type_name": "Wet"},
+    {"id": 2, "waste_type_name": "Dry"},
+    {"id": 3, "waste_type_name": "Mixed"},
+  ];
 
   @override
   void initState() {
@@ -67,12 +74,22 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     _wasteData.clear();
 
     latestWeight = "--";
+    _historyService = getIt<CollectionHistoryService>();
 
     // 🔁 Bluetooth adapter re-init
     Future.delayed(const Duration(seconds: 1), () async {
+      if (!await _ensureBluetoothPermissions()) return;
       debugPrint("♻️ Reinitializing Bluetooth adapter...");
       await FlutterBluetoothSerial.instance.cancelDiscovery();
-      await FlutterBluetoothSerial.instance.requestEnable();
+      final isEnabled =
+          await FlutterBluetoothSerial.instance.isEnabled ?? false;
+      if (!isEnabled) {
+        try {
+          await FlutterBluetoothSerial.instance.requestEnable();
+        } catch (e) {
+          debugPrint("⚠️ Unable to prompt for Bluetooth enable: $e");
+        }
+      }
       await _resetBluetooth();
       await _initBluetooth();
     });
@@ -195,42 +212,41 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   }
 
   // ==================== FETCH WASTE TYPES ====================
-Future<void> _fetchWasteTypes() async {
-  try {
-    final response = await http.get(
-      Uri.parse('http://192.168.4.75:8000/api/mobile/waste/get-waste-types/'),
-    );
+  Future<void> _fetchWasteTypes() async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://192.168.4.75:8000/api/mobile/waste/get-waste-types/'),
+      );
 
-    final data = json.decode(response.body);
+      final data = json.decode(response.body);
 
-    if (data['status'] == 'success' && data['data'] != null) {
-      wasteTypes = List<Map<String, dynamic>>.from(data['data']);
-    } else {
+      if (data['status'] == 'success' && data['data'] != null) {
+        wasteTypes = List<Map<String, dynamic>>.from(data['data']);
+      } else {
+        wasteTypes = defaultWasteTypes;
+      }
+    } catch (e) {
+      debugPrint('⚠ Waste type API failed, using fallback defaults');
       wasteTypes = defaultWasteTypes;
     }
-  } catch (e) {
-    debugPrint('⚠ Waste type API failed, using fallback defaults');
-    wasteTypes = defaultWasteTypes;
+
+    // Build UI base structure
+    _wasteData = {
+      for (var item in wasteTypes)
+        item['waste_type_name'].toString().toLowerCase(): {
+          'waste_type_id': item['id'],
+          'label': item['waste_type_name'],
+          'unique_id': null,
+          'image': null,
+          'weight': '--',
+          'finalWeight': null,
+          'isAdded': false,
+        }
+    };
+
+    setState(() {});
+    await _loadOfflineForScreen();
   }
-
-  // Build UI base structure
-  _wasteData = {
-    for (var item in wasteTypes)
-      item['waste_type_name'].toString().toLowerCase(): {
-        'waste_type_id': item['id'],
-        'unique_id': null,
-        'image': null,
-        'weight': '--',
-        'finalWeight': null,
-        'isAdded': false,
-      }
-  };
-
-  setState(() {});
-  await _loadOfflineForScreen();
-}
-
-
 
   // ==================== IMAGE CAPTURE ====================
   Future<File?> _captureImage(String type) async {
@@ -258,7 +274,8 @@ Future<void> _fetchWasteTypes() async {
 
   Future<void> _fetchWasteRecord(String type) async {
     try {
-      final uri = Uri.parse('http://192.168.4.75:8000/api/mobile/waste/get-latest-waste/');
+      final uri = Uri.parse(
+          'http://192.168.4.75:8000/api/mobile/waste/get-latest-waste/');
       final response = await http.post(uri, body: {
         'screen_unique_id': screenUniqueId,
         'customer_id': widget.customerId,
@@ -490,9 +507,9 @@ Future<void> _fetchWasteTypes() async {
   Future<void> _submitForm() async {
     setState(() => _isSubmitting = true);
 
-    try {
+    final totalWeight = _calculateTotalWeight();
 
-      final totalWeight = _calculateTotalWeight();
+    try {
       debugPrint('🔎 total waste before submit: $totalWeight');
 
       if (totalWeight <= 0) {
@@ -501,7 +518,8 @@ Future<void> _fetchWasteTypes() async {
         return;
       }
 
-      final uri = Uri.parse('http://192.168.4.75:8000/api/mobile/waste/finalize-waste/');
+      final uri = Uri.parse(
+          'http://192.168.4.75:8000/api/mobile/waste/finalize-waste/');
 
       final request = http.MultipartRequest('POST', uri)
         ..fields['screen_unique_id'] = screenUniqueId
@@ -514,45 +532,44 @@ Future<void> _fetchWasteTypes() async {
           json.decode((await http.Response.fromStream(response)).body);
 
       if (result['status'] == 'success') {
+        await _recordCollectionHistory(totalWeight);
         _resetUI();
         await _fetchWasteTypes();
         _showDialog("Success", "Record submitted successfully");
       } else {
         throw Exception(result['message']);
       }
-    }catch (e) {
-  debugPrint("⚠️ Finalize failed, storing offline: $e");
+    } catch (e) {
+      debugPrint("⚠️ Finalize failed, storing offline: $e");
 
-  final pendingFinalize = PendingFinalizeRecord(
-    screenId: screenUniqueId,
-    customerId: widget.customerId,
-    totalWeight: _calculateTotalWeight(),
-    entryType: "app",
-  );
+      final pendingFinalize = PendingFinalizeRecord(
+        screenId: screenUniqueId,
+        customerId: widget.customerId,
+        totalWeight: _calculateTotalWeight(),
+        entryType: "app",
+      );
 
-  await _finalizeDao.insert(pendingFinalize);
+      await _finalizeDao.insert(pendingFinalize);
 
-  // Prevent crash if internet is OFF
-  try {
-    if (await _syncService.hasInternet()) {
-      await _syncService.syncAll();
-    }
-  } catch (err) {
-    debugPrint("⚠️ Sync attempt failed: $err");
-  }
+      // Prevent crash if internet is OFF
+      try {
+        if (await _syncService.hasInternet()) {
+          await _syncService.syncAll();
+        }
+      } catch (err) {
+        debugPrint("⚠️ Sync attempt failed: $err");
+      }
 
-  // Reset UI like online mode
-  _resetUI();
-  await _fetchWasteTypes();
+      // Reset UI like online mode
+      await _recordCollectionHistory(totalWeight);
+      _resetUI();
+      await _fetchWasteTypes();
 
-  _showDialog(
-    "Offline Mode",
-    "Finalize request saved offline. Will sync automatically when you reconnect.",
-  );
-}
-
-    
-     finally {
+      _showDialog(
+        "Offline Mode",
+        "Finalize request saved offline. Will sync automatically when you reconnect.",
+      );
+    } finally {
       setState(() => _isSubmitting = false);
     }
   }
@@ -564,6 +581,42 @@ Future<void> _fetchWasteTypes() async {
           0;
       return sum + w;
     });
+  }
+
+  Future<void> _recordCollectionHistory(double totalWeight) async {
+    final sections = _wasteData.entries
+        .map((entry) {
+          final resolvedWeight = _weightFromEntry(entry.value);
+          if (resolvedWeight <= 0) return null;
+          final label =
+              entry.value['label']?.toString() ?? entry.key.toUpperCase();
+          final image = entry.value['image'] as File?;
+          return CollectionHistorySection(
+            type: label,
+            weight: resolvedWeight.toStringAsFixed(2),
+            imagePath: image?.path,
+          );
+        })
+        .whereType<CollectionHistorySection>()
+        .toList();
+
+    if (sections.isEmpty) return;
+
+    final entry = CollectionHistoryEntry(
+      customerId: widget.customerId,
+      customerName: widget.customerName,
+      collectedAt: DateTime.now(),
+      sections: sections,
+      totalWeight: totalWeight,
+    );
+
+    await _historyService.addEntry(entry);
+  }
+
+  double _weightFromEntry(Map<String, dynamic> entry) {
+    final source = entry['finalWeight'] ?? entry['weight'];
+    if (source == null) return 0;
+    return double.tryParse(source.toString()) ?? 0;
   }
 
   // ==================== DIALOG ====================
@@ -585,11 +638,10 @@ Future<void> _fetchWasteTypes() async {
 
   // ==================== UI HELPERS ====================
   Widget _buildCustomerInfo() => Card(
-        color: Colors.white,
-        elevation: 2,
+        color: OperatorTheme.surface,
+        elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4),
-          side: BorderSide(color: Colors.grey.withOpacity(0.3)),
+          borderRadius: OperatorTheme.cardRadius,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -602,8 +654,20 @@ Future<void> _fetchWasteTypes() async {
       );
 
   Widget _infoTile(String label, String value) => ListTile(
-        title: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(value, style: const TextStyle(fontSize: 16)),
+        title: Text(
+          label,
+          style: AppTextStyles.bodyMedium.copyWith(
+            fontWeight: FontWeight.w600,
+            color: OperatorTheme.strongText,
+          ),
+        ),
+        subtitle: Text(
+          value,
+          style: AppTextStyles.bodyMedium.copyWith(
+            fontWeight: FontWeight.w500,
+            color: OperatorTheme.mutedText,
+          ),
+        ),
       );
 
   Widget _buildWasteSection(String type, String displayName) {
@@ -616,12 +680,12 @@ Future<void> _fetchWasteTypes() async {
             : item['weight'];
 
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 10),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: OperatorTheme.cardRadius,
         side: BorderSide(
-          color: (type == activeType) ? Colors.blueAccent : Colors.black12,
-          width: (type == activeType) ? 2 : 1,
+          color: (type == activeType) ? OperatorTheme.primary : Colors.black12,
+          width: (type == activeType) ? 1.5 : 1,
         ),
       ),
       child: Padding(
@@ -629,10 +693,11 @@ Future<void> _fetchWasteTypes() async {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(displayName,
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
+            Text(
+              displayName,
+              style: AppTextStyles.heading2,
+            ),
+            const SizedBox(height: 8),
 
             // IMAGE
             if (image != null)
@@ -648,58 +713,82 @@ Future<void> _fetchWasteTypes() async {
               Container(
                 height: 180,
                 width: double.infinity,
-                color: Colors.grey[200],
+                decoration: BoxDecoration(
+                  color: OperatorTheme.accentLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: const Icon(Icons.camera_alt_outlined,
-                    size: 50, color: Colors.grey),
+                    size: 48, color: Colors.grey),
               ),
 
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
 
             Text(
               "Weight: ${displayWeight == '--' ? '--' : '$displayWeight kg'}",
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              style: AppTextStyles.bodyMedium.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
             ),
 
             const SizedBox(height: 10),
 
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    final picked =
-                        await _picker.pickImage(source: ImageSource.camera);
-                    if (picked == null) return;
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final picked =
+                          await _picker.pickImage(source: ImageSource.camera);
+                      if (picked == null) return;
 
-                    final original = File(picked.path);
-                    final compressed =
-                        await ImageCompressService.compress(original);
+                      final original = File(picked.path);
+                      final compressed =
+                          await ImageCompressService.compress(original);
 
-                    setState(() {
-                      final updated = Map<String, dynamic>.from(item);
-                      updated['image'] = compressed;
-                      updated['weight'] = latestWeight;
+                      setState(() {
+                        final updated = Map<String, dynamic>.from(item);
+                        updated['image'] = compressed;
+                        updated['weight'] = latestWeight;
 
-                      _wasteData = {
-                        ..._wasteData,
-                        type: updated,
-                      };
+                        _wasteData = {
+                          ..._wasteData,
+                          type: updated,
+                        };
 
-                      activeType = type;
-                    });
-                  },
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text("Capture"),
-                ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isAdded
-                        ? Colors.orange.shade600
-                        : Colors.green.shade700,
+                        activeType = type;
+                      });
+                    },
+                    icon: const Icon(Icons.camera_alt, size: 18),
+                    label: Text(
+                      "Capture",
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                  onPressed: () => _handleAdd(type),
-                  icon: Icon(isAdded ? Icons.refresh : Icons.add),
-                  label: Text(isAdded ? "Update" : "Add"),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isAdded
+                          ? Colors.orange.shade600
+                          : OperatorTheme.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: () => _handleAdd(type),
+                    icon: Icon(
+                      isAdded ? Icons.refresh : Icons.add,
+                      size: 18,
+                    ),
+                    label: Text(
+                      isAdded ? "Update" : "Add",
+                      style: AppTextStyles.labelLarge.copyWith(
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -730,9 +819,13 @@ Future<void> _fetchWasteTypes() async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: OperatorTheme.background,
       appBar: AppBar(
-        backgroundColor: const Color.fromRGBO(0, 61, 125, 0.8),
-        title: const Text("Customer Details"),
+        backgroundColor: OperatorTheme.primary,
+        title: Text(
+          "Customer Details",
+          style: AppTextStyles.heading2.copyWith(color: Colors.white),
+        ),
       ),
       body: wasteTypes.isEmpty
           ? const Center(child: CircularProgressIndicator())
@@ -740,15 +833,13 @@ Future<void> _fetchWasteTypes() async {
               children: [
                 Container(
                   width: double.infinity,
-                  color: Colors.blueGrey.shade50,
+                  color: OperatorTheme.accentLight,
                   padding:
                       const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                   child: Text(
                     "📟 Live Weight: ${latestWeight == '--' ? '--' : '$latestWeight kg'}",
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                    style: AppTextStyles.heading2.copyWith(
+                      color: OperatorTheme.strongText,
                     ),
                   ),
                 ),
@@ -758,7 +849,7 @@ Future<void> _fetchWasteTypes() async {
                     child: Column(
                       children: [
                         _buildCustomerInfo(),
-                        const SizedBox(height: 15),
+                        const SizedBox(height: 12),
                         ...wasteTypes.map((w) {
                           final type =
                               w['waste_type_name'].toString().toLowerCase();
@@ -769,7 +860,7 @@ Future<void> _fetchWasteTypes() async {
                             child: _buildWasteSection(type, name),
                           );
                         }),
-                        const SizedBox(height: 25),
+                        const SizedBox(height: 20),
                         _isSubmitting
                             ? const CircularProgressIndicator()
                             : ElevatedButton(
@@ -780,10 +871,11 @@ Future<void> _fetchWasteTypes() async {
                                       horizontal: 40, vertical: 12),
                                 ),
                                 onPressed: _submitForm,
-                                child: const Text(
+                                child: Text(
                                   'Submit',
-                                  style: TextStyle(
-                                      color: Colors.white, fontSize: 16),
+                                  style: AppTextStyles.labelLarge.copyWith(
+                                    fontSize: 14,
+                                  ),
                                 ),
                               ),
                       ],
@@ -796,6 +888,27 @@ Future<void> _fetchWasteTypes() async {
   }
 
   // ==================== BLUETOOTH INIT ====================
+
+  Future<bool> _ensureBluetoothPermissions() async {
+    final statuses = await [
+      Permission.bluetooth,
+      Permission.bluetoothConnect,
+      Permission.bluetoothScan,
+      Permission.locationWhenInUse,
+    ].request();
+
+    final granted = statuses.values.every((status) => status.isGranted);
+    if (!granted && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Bluetooth permissions are required to capture weight.'),
+        ),
+      );
+    }
+    return granted;
+  }
+
 //   Future<void> _initBluetooth() async {
 //     if (connected) return;
 
@@ -870,12 +983,7 @@ Future<void> _fetchWasteTypes() async {
   Future<void> _initBluetooth() async {
     if (connected) return;
 
-    await [
-      Permission.bluetooth,
-      Permission.bluetoothConnect,
-      Permission.bluetoothScan,
-      Permission.locationWhenInUse,
-    ].request();
+    if (!await _ensureBluetoothPermissions()) return;
 
     final devices = await FlutterBluetoothSerial.instance.getBondedDevices();
     if (devices.isEmpty) {
