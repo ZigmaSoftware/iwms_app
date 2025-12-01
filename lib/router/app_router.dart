@@ -27,9 +27,10 @@ import 'package:iwms_citizen_app/modules/module1_citizen/citizen/grievance_chat.
 
 // Operator Modules
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_home_page.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_login_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_data_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehomepage.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_qr_scanner.dart';
+
 
 // Driver
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/driver_home_page.dart';
@@ -57,9 +58,11 @@ class AppRoutePaths {
   static const String citizenProfile = '/citizen/profile';
 
   static const String operatorLogin = '/operator/login';
-  static const String operatorHome = '/operator-home';
-  static const String operatorData = '/operator-data';
-  static const String attendanceHomepageOperator = '/operator/attendance/homepage';
+static const String operatorHome = '/operator/home';
+static const String operatorQR = '/operator/qr';
+static const String operatorData = '/operator/data';
+static const String attendanceHomepageOperator = '/operator/attendance/homepage';
+
 
   static const String driverLogin = '/driver/login';
   static const String driverHome = '/driver/home';
@@ -169,52 +172,42 @@ class AppRouter {
         ),
 
         // Operator
-        GoRoute(
-          path: AppRoutePaths.operatorLogin,
-          builder: (context, state) => const OperatorLoginScreen(),
-        ),
-        GoRoute(
-          path: AppRoutePaths.operatorHome,
-          builder: (context, state) {
-            final s = authBloc.state;
-            final username =
-                (s is AuthStateAuthenticated) ? s.userName : "Citizen";
-             final emp_id =
-                (s is AuthStateAuthenticated) ? s.emp_id : "";
-            return OperatorHomePage(userName: username,emp_id:emp_id);
-          },
-          // builder: (context, state) => const OperatorHomePage(),
-        ),
-        GoRoute(
-          path: AppRoutePaths.operatorData,
-          builder: (context, state) {
-            final e = state.extra as Map<String, dynamic>;
-            return OperatorDataScreen(
-              customerId: e['customerId'],
-              customerName: e['customerName'],
-              contactNo: e['contactNo'],
-              latitude: e['latitude'],
-              longitude: e['longitude'],
-            );
-          },
-        ),
-        GoRoute(
-          path: AppRoutePaths.attendanceHomepageOperator,
-          // builder: (context, state) {
-          //   return HomePage1(
-          //     empid: '504',
-          //     userName: 'Operator',
-          //   );
-          // },
-           builder: (context, state) {
-            final s = authBloc.state;
-            final username =
-                (s is AuthStateAuthenticated) ? s.userName : "Citizen";
-             final emp_id =
-                (s is AuthStateAuthenticated) ? s.emp_id : "";
-            return HomePage1(userName: username,empid:emp_id!);
-          },
-        ),
+       // ---------------- OPERATOR ROUTES ----------------
+
+GoRoute(
+  path: AppRoutePaths.operatorHome,
+  builder: (context, state) => const OperatorHomePage(),
+),
+
+GoRoute(
+  path: '/operator/qr',
+  builder: (context, state) => const OperatorQRScanner(),
+),
+
+GoRoute(
+  path: AppRoutePaths.operatorData,
+  builder: (context, state) {
+    final extra = state.extra as Map<String, dynamic>? ?? {};
+    return OperatorDataScreen(
+      customerId: extra['customerId'],
+      customerName: extra['customerName'],
+      contactNo: extra['contactNo'],
+      latitude: extra['latitude'],
+      longitude: extra['longitude'],
+    );
+  },
+),
+
+GoRoute(
+  path: AppRoutePaths.attendanceHomepageOperator,
+  builder: (context, state) {
+    return HomePage1(
+      empid: '504',
+      userName: 'Operator',
+    );
+  },
+),
+
 
         // Driver
         GoRoute(
@@ -236,6 +229,7 @@ class AppRouter {
   }
 
   // REDIRECT LOGIC
+  
   String? _redirect(BuildContext context, GoRouterState state) {
     final auth = authBloc.state;
     final location = state.matchedLocation;
@@ -264,7 +258,8 @@ class AppRouter {
           return isPublic ? AppRoutePaths.citizenHome : null;
 
         case "operator":
-          return isPublic ? AppRoutePaths.operatorHome : null;
+        return isPublic ? AppRoutePaths.operatorHome : null;
+
 
         case "driver":
           return isPublic ? AppRoutePaths.driverHome : null;

@@ -10,7 +10,7 @@ plugins {
 android {
     namespace = "com.example.iwms_citizen_app" // Using your new namespace
     compileSdk = 36
-    ndkVersion = "27.0.12077973"
+    ndkVersion = "26.1.10909125"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -24,7 +24,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.iwms_citizen_app"
-        minSdk = 23
+        minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
