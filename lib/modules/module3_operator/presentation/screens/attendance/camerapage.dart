@@ -20,7 +20,7 @@ class CameraScreen extends StatefulWidget {
   // final VoidCallback onAttendanceMarked;
   const CameraScreen({super.key, 
     required this.employeeId,
-    required this.employeeName,
+    required this.employeeName, required String userName,
     // required this.latitude,
     // required this.longitude,
     // required this.onAttendanceMarked,
@@ -256,7 +256,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://125.17.238.158:5000/recognize'),
+        Uri.parse('http://10.64.151.226:8000/api/mobile/recognize/'),
       );
       request.fields['emp_id'] = widget.employeeId;
       request.fields['name'] = widget.employeeName;

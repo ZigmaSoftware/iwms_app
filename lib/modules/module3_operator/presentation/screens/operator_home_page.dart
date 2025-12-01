@@ -1,3 +1,5 @@
+// import 'dart:js_interop';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -13,8 +15,9 @@ const Color _operatorPrimary = Color(0xFF1B5E20);
 const Color _operatorAccent = Color(0xFF66BB6A);
 
 class OperatorHomePage extends StatefulWidget {
-  const OperatorHomePage({super.key});
-
+  const OperatorHomePage({super.key,required this.userName,this.emp_id});
+  final String userName;
+  final String?emp_id;
   @override
   State<OperatorHomePage> createState() => _OperatorHomePageState();
 }
@@ -24,9 +27,9 @@ class _OperatorHomePageState extends State<OperatorHomePage> {
 
   String get _greeting {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
+    if (hour < 12) return 'Good morning  ${widget.userName}( ${widget.emp_id})';
+    if (hour < 17) return 'Good afternoon ${widget.userName}( ${widget.emp_id})';
+    return 'Good evening  ${widget.userName}( ${widget.emp_id})';
   }
 
   @override
@@ -191,6 +194,7 @@ class _OperatorHeader extends StatelessWidget {
   const _OperatorHeader({
     required this.greeting,
     required this.onLogoutTapped,
+   
   });
 
   final String greeting;

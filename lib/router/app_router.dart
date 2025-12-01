@@ -175,7 +175,15 @@ class AppRouter {
         ),
         GoRoute(
           path: AppRoutePaths.operatorHome,
-          builder: (context, state) => const OperatorHomePage(),
+          builder: (context, state) {
+            final s = authBloc.state;
+            final username =
+                (s is AuthStateAuthenticated) ? s.userName : "Citizen";
+             final emp_id =
+                (s is AuthStateAuthenticated) ? s.emp_id : "";
+            return OperatorHomePage(userName: username,emp_id:emp_id);
+          },
+          // builder: (context, state) => const OperatorHomePage(),
         ),
         GoRoute(
           path: AppRoutePaths.operatorData,
@@ -192,11 +200,19 @@ class AppRouter {
         ),
         GoRoute(
           path: AppRoutePaths.attendanceHomepageOperator,
-          builder: (context, state) {
-            return HomePage1(
-              empid: '504',
-              userName: 'Operator',
-            );
+          // builder: (context, state) {
+          //   return HomePage1(
+          //     empid: '504',
+          //     userName: 'Operator',
+          //   );
+          // },
+           builder: (context, state) {
+            final s = authBloc.state;
+            final username =
+                (s is AuthStateAuthenticated) ? s.userName : "Citizen";
+             final emp_id =
+                (s is AuthStateAuthenticated) ? s.emp_id : "";
+            return HomePage1(userName: username,empid:emp_id!);
           },
         ),
 

@@ -25,6 +25,7 @@ class HomePage1 extends StatefulWidget {
 }
 
 class _HomePage1State extends State<HomePage1> {
+
   int _activeTab = 1; // Default to Overview
 
   late final List<Widget> _pages;
@@ -36,7 +37,7 @@ class _HomePage1State extends State<HomePage1> {
     _checkPermissionsAndGps();
 
     _pages = [
-      OperatorHomePage(),
+      OperatorHomePage(userName:widget.userName,emp_id: widget.empid,),
       AttendancePage(),
       AttendanceHistory(empId: widget.empid),
     ];
