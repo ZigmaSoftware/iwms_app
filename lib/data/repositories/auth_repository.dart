@@ -1,6 +1,10 @@
 // lib/data/repositories/auth_repository.dart
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/offiline_store/dbservices.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:iwms_citizen_app/core/api_config.dart';
@@ -113,9 +117,54 @@ class AuthRepository {
   //     throw AuthRepositoryException('Unexpected error occurred. Please try again.');
   //   }
   // }
+// Future<UserModel> loginCitizen({
+//   required String username,
+//   required String password,
+// }) async {
+//   if (username.trim().isEmpty) {
+//     throw AuthRepositoryException("Username is required.");
+//   }
+//   if (password.trim().isEmpty) {
+//     throw AuthRepositoryException("Password is required.");
+//   }
+
+//   try {
+//     final response = await _dio.post(
+//       ApiConfig.citizenLogin,
+//       data: {
+//         "username": username.trim(),
+//         "password": password.trim(),
+//       },
+//     );
+
+//     debugPrint("API Login Response: ${response.data}");
+
+//     // The server returns SUCCESS always with no "status" flag.
+//     // Validate essential fields manually.
+//     final data = response.data;
+
+//     if (data["unique_id"] == null ||
+//         data["role"] == null ||
+//         data["name"] == null ||
+//         data["access_token"] == null) {
+//       throw AuthRepositoryException("Invalid login response from server.");
+//     }
+
+//     // Convert to model
+//     final user = UserModel.fromApi(data);
+
+//     // Save user to SharedPreferences
+//     await saveUser(user);
+
+//     return user;
+//   } catch (e) {
+//     throw AuthRepositoryException("Login failed. Please try again.");
+//   }
+// }
 Future<UserModel> loginCitizen({
   required String username,
   required String password,
+  bool forceOffline = false,
 }) async {
   if (username.trim().isEmpty) {
     throw AuthRepositoryException("Username is required.");
@@ -124,39 +173,79 @@ Future<UserModel> loginCitizen({
     throw AuthRepositoryException("Password is required.");
   }
 
+  final inputHash = sha256.convert(utf8.encode(password.trim())).toString();
+
+  // ============================================================
+  // OFFLINE LOGIN — OPERATOR ONLY
+  // ============================================================
+  Future<UserModel> offlineLogin() async {
+    final data = await getOperatorFromDB(username.trim());
+
+    if (data == null) {
+      throw AuthRepositoryException("Offline login unavailable.");
+    }
+
+    if (data["password_hash"] != inputHash) {
+      throw AuthRepositoryException("Incorrect offline password.");
+    }
+
+    return UserModel(
+      userId: data["unique_id"],
+      userName: data["name"],
+      role: data["role"],
+      authToken: data["access_token"],
+      emp_id: data["emp_id"],
+      customer_id: data["customer_id"],
+    );
+  }
+
+  if (forceOffline) return offlineLogin();
+
+  // ============================================================
+  // ONLINE LOGIN — UNIVERSAL FOR CITIZEN / OPERATOR
+  // ============================================================
   try {
     final response = await _dio.post(
-      ApiConfig.citizenLogin,
+      ApiConfig.citizenLogin, // unified API endpoint
       data: {
         "username": username.trim(),
         "password": password.trim(),
       },
     );
 
-    debugPrint("API Login Response: ${response.data}");
-
-    // The server returns SUCCESS always with no "status" flag.
-    // Validate essential fields manually.
     final data = response.data;
 
     if (data["unique_id"] == null ||
         data["role"] == null ||
         data["name"] == null ||
         data["access_token"] == null) {
-      throw AuthRepositoryException("Invalid login response from server.");
+      throw AuthRepositoryException("Invalid response from server.");
     }
 
-    // Convert to model
     final user = UserModel.fromApi(data);
 
-    // Save user to SharedPreferences
+    // ------------------------------------------------------------
+    // SAVE USER IN SHARED PREFERENCES (all users)
+    // ------------------------------------------------------------
     await saveUser(user);
 
+    // ------------------------------------------------------------
+    // IF OPERATOR → SAVE ALSO INTO SQLITE FOR OFFLINE LOGIN
+    // ------------------------------------------------------------
+    if (user.role == "operator") {
+      await saveOperatorToDB(data, password.trim());
+    }
+
     return user;
+
   } catch (e) {
-    throw AuthRepositoryException("Login failed. Please try again.");
+    // ------------------------------------------------------------
+    // If API fails → offline fallback for operators
+    // ------------------------------------------------------------
+    return offlineLogin();
   }
 }
+
 
   Future<UserModel> loginDriver({
     required String userName,

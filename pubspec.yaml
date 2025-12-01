@@ -34,7 +34,8 @@ dependencies:
   flutter_animate: ^4.5.0
   shared_preferences: ^2.5.3 
   graphic: ^2.5.0
-
+  sqflite: ^2.4.2
+  crypto:  ^3.0.3
   # --- Module 1 (Citizen) Packages ---
   flutter_map: ^7.0.1          # <-- UPGRADED
   latlong2: ^0.9.1            # <-- UPGRADED
