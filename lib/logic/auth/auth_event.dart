@@ -1,50 +1,25 @@
-// lib/logic/auth/auth_event.dart
-import 'package:equatable/equatable.dart';
+abstract class AuthEvent {}
 
-abstract class AuthEvent extends Equatable {
-  const AuthEvent();
-
-  @override
-  List<Object?> get props => [];
-}
+class AuthStatusChecked extends AuthEvent {}
 
 class AuthCitizenLoginRequested extends AuthEvent {
-  final String? phone;
-  final String? fullName;
+  final String username;
+  final String password;
 
-  const AuthCitizenLoginRequested({
-    this.phone,
-    this.fullName,
-  });
-
-  @override
-  List<Object?> get props => [phone, fullName];
+  AuthCitizenLoginRequested({required this.username, required this.password});
 }
 
 class AuthCitizenRegisterRequested extends AuthEvent {
   final String fullName;
-  final String email;
-  final String password;
 
-  const AuthCitizenRegisterRequested({
-    required this.fullName,
-    required this.email,
-    required this.password,
-  });
-
-  @override
-  List<Object?> get props => [fullName, email, password];
+  AuthCitizenRegisterRequested({required this.fullName});
 }
 
 class AuthLogoutRequested extends AuthEvent {}
 
-class AuthStatusChecked extends AuthEvent {}
 class AuthOperatorLoginRequested extends AuthEvent {
-  final String userName;
   final String operatorId;
+  final String userName;
 
-  AuthOperatorLoginRequested({
-    required this.userName,
-    required this.operatorId,
-  });
+  AuthOperatorLoginRequested({required this.operatorId, required this.userName});
 }

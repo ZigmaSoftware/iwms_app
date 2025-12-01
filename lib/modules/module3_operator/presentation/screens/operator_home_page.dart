@@ -1,3 +1,5 @@
+// import 'dart:js_interop';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -5,13 +7,17 @@ import 'package:motion_tab_bar/MotionTabBar.dart';
 
 import 'package:iwms_citizen_app/router/app_router.dart';
 import 'operator_qr_scanner.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 
 const Color _operatorPrimary = Color(0xFF1B5E20);
 const Color _operatorAccent = Color(0xFF66BB6A);
 
 class OperatorHomePage extends StatefulWidget {
-  const OperatorHomePage({super.key});
-
+  const OperatorHomePage({super.key,required this.userName,this.emp_id});
+  final String userName;
+  final String?emp_id;
   @override
   State<OperatorHomePage> createState() => _OperatorHomePageState();
 }
@@ -21,9 +27,9 @@ class _OperatorHomePageState extends State<OperatorHomePage> {
 
   String get _greeting {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
+    if (hour < 12) return 'Good morning  ${widget.userName}( ${widget.emp_id})';
+    if (hour < 17) return 'Good afternoon ${widget.userName}( ${widget.emp_id})';
+    return 'Good evening  ${widget.userName}( ${widget.emp_id})';
   }
 
   @override
@@ -158,7 +164,8 @@ class _OperatorHomePageState extends State<OperatorHomePage> {
                       onPressed: () {
                         Navigator.of(sheetContext).maybePop();
                         if (!mounted) return;
-                        context.go(AppRoutePaths.operatorLogin);
+                        context.read<AuthBloc>().add(AuthLogoutRequested());
+                        // context.go(AppRoutePaths.citizenLogin);
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _operatorPrimary,
@@ -187,6 +194,7 @@ class _OperatorHeader extends StatelessWidget {
   const _OperatorHeader({
     required this.greeting,
     required this.onLogoutTapped,
+   
   });
 
   final String greeting;
@@ -247,15 +255,20 @@ class _OperatorHeader extends StatelessWidget {
           const SizedBox(height: 24),
           Row(
             children: [
-              Expanded(
+              Flexible(
+                flex: 1,
+                fit: FlexFit.tight,
                 child: _HeaderStat(
                   title: 'Today',
                   subtitle: dateLabel,
                   icon: Icons.calendar_today_rounded,
+                  
                 ),
               ),
               const SizedBox(width: 12),
-              Expanded(
+              Flexible(
+                flex: 1,
+                fit: FlexFit.loose,
                 child: _HeaderStat(
                   title: 'Route status',
                   subtitle: '11 / 18 sites done',
@@ -313,6 +326,14 @@ class _OverviewPage extends StatelessWidget {
         label: 'View Assignments',
         icon: Icons.assignment_turned_in_outlined,
         onTap: () => _showPlaceholder(context, 'Assignments refreshed'),
+      ),
+       _QuickAction(
+        label: 'Attendance',
+        icon: Icons.face_3_outlined,
+        onTap: () {
+           context.push(AppRoutePaths.attendanceHomepageOperator);
+        },
+        // onTap: () => _showPlaceholder(context, 'Assignments refreshed'),
       ),
     ];
 

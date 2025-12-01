@@ -7,34 +7,34 @@ class AppTextStyles {
       GoogleFonts.roboto().fontFamily ?? 'Roboto';
 
   static final TextStyle titleLarge = GoogleFonts.roboto(
-    fontSize: 26.0,
+    fontSize: 24.0,
     fontWeight: FontWeight.w700,
     color: AppColors.textPrimary,
     letterSpacing: -0.4,
   );
 
   static final TextStyle bodyMedium = GoogleFonts.roboto(
-    fontSize: 14.0,
+    fontSize: 12.0,
     color: AppColors.textPrimary,
     height: 1.35,
   );
 
   static final TextStyle labelLarge = GoogleFonts.montserrat(
     fontWeight: FontWeight.w600,
-    fontSize: 14.0,
+    fontSize: 12.0,
     color: AppColors.white,
     letterSpacing: 0.2,
   );
 
   static final TextStyle heading2 = GoogleFonts.montserrat(
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: FontWeight.w600,
     color: AppColors.textPrimary,
     letterSpacing: -0.2,
   );
 
   static final TextStyle subTitle = GoogleFonts.montserrat(
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: FontWeight.w500,
     color: AppColors.textSecondary,
     height: 1.3,

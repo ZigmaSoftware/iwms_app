@@ -1,15 +1,35 @@
 import 'package:flutter/material.dart';
-// Layered imports
-class TrackWasteScreen extends StatelessWidget {
+import 'package:iwms_citizen_app/features/citizen_dashboard/track/controllers/track_controller.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/track/widgets/track_tab.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/track/services/track_service.dart';
+
+class TrackWasteScreen extends StatefulWidget {
   const TrackWasteScreen({super.key});
+
+  @override
+  State<TrackWasteScreen> createState() => _TrackWasteScreenState();
+}
+
+class _TrackWasteScreenState extends State<TrackWasteScreen> {
+  late final TrackController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TrackController(TrackService())..refresh();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final primaryColor = colorScheme.primary;
-    final textColor = colorScheme.onSurface;
-    final placeholderColor = colorScheme.onSurfaceVariant;
+    final highlightColor = theme.colorScheme.primary;
+    final textColor = theme.colorScheme.onSurface;
 
     return Scaffold(
       appBar: AppBar(
@@ -20,64 +40,41 @@ class TrackWasteScreen extends StatelessWidget {
             fontWeight: FontWeight.w600,
           ),
         ),
-        backgroundColor: primaryColor,
+        backgroundColor: highlightColor,
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.pin_drop_outlined, size: 80, color: primaryColor),
-              const SizedBox(height: 20),
-              Text(
-                'Real-Time Tracking (IWMS)',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'This screen will display the live location of the assigned collection vehicle using GPS tracking (D2D Collection & Logistics Management).',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: placeholderColor,
-                ),
-              ),
-              const SizedBox(height: 30),
-              // Placeholder for a map view
-              Container(
-                height: 200,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: colorScheme.outline.withValues(alpha: 0.4)),
-                ),
-                child: Center(
-                  child: Text(
-                    'Loading Map...',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: placeholderColor,
+      body: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          return TrackTab(
+            controller: _controller,
+            highlightColor: highlightColor,
+            textColor: textColor,
+            onPickDate: () async {
+              final now = DateTime.now();
+              final selected = await showDatePicker(
+                context: context,
+                initialDate: _controller.selectedDate,
+                firstDate: DateTime(now.year - 1),
+                lastDate: DateTime(now.year + 1),
+                helpText: 'Choose a date to view collection data',
+                builder: (context, child) {
+                  return Theme(
+                    data: theme.copyWith(
+                      colorScheme: theme.colorScheme.copyWith(
+                        primary: highlightColor,
+                      ),
                     ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Updates will include estimated time of arrival (ETA) and route adherence alerts.',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontStyle: FontStyle.italic,
-                  color: placeholderColor,
-                ),
-              ),
-            ],
-          ),
-        ),
+                    child: child!,
+                  );
+                },
+              );
+
+              if (selected != null) {
+                await _controller.pickDate(selected);
+              }
+            },
+          );
+        },
       ),
     );
   }

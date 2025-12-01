@@ -4,6 +4,18 @@ import 'app_text_styles.dart';
 import 'package:iwms_citizen_app/core/constants.dart'; // Import your kPrimaryColor
 
 class AppTheme {
+  static const PageTransitionsTheme _cupertinoPageTransitions =
+      PageTransitionsTheme(
+    builders: {
+      TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.fuchsia: CupertinoPageTransitionsBuilder(),
+    },
+  );
+
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
@@ -76,6 +88,7 @@ class AppTheme {
         iconColor: AppColors.primary,
         textColor: AppColors.textPrimary,
       ),
+      pageTransitionsTheme: _cupertinoPageTransitions,
     );
   }
 
@@ -155,6 +168,7 @@ class AppTheme {
         iconColor: Colors.white70,
         textColor: Colors.white,
       ),
+      pageTransitionsTheme: _cupertinoPageTransitions,
     );
   }
 }

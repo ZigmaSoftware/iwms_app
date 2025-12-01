@@ -1,12 +1,9 @@
-// lib/logic/auth/auth_bloc.dart
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:iwms_citizen_app/data/models/user_model.dart';
 import '../../data/repositories/auth_repository.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
-
-const String _demoCitizenName = 'Citizen Demo';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final AuthRepository _authRepository;
@@ -22,10 +19,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthLogoutRequested>(_onLogoutRequested);
     on<AuthOperatorLoginRequested>(_onOperatorLoginRequested);
 
-
-    initialization.then((_) {
-      add(AuthStatusChecked());
-    });
+    initialization.then((_) => add(AuthStatusChecked()));
   }
 
   Future<void> _onStatusChecked(
@@ -33,24 +27,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     emit(const AuthStateInitial());
-    final user = await _authRepository.getAuthenticatedUser();
 
-    if (user != null) {
-      switch (user.role) {
-        case 'citizen':
-          emit(AuthStateAuthenticatedCitizen(userName: user.userName));
-          break;
-        case 'operator':
-          emit(AuthStateAuthenticatedOperator(userName: user.userName));
-          break;
-        default:
-          await _authRepository.logout();
-          emit(const AuthStateUnauthenticated());
-          break;
-      }
-    } else {
+    final user = await _authRepository.getAuthenticatedUser();
+    if (user == null) {
       emit(const AuthStateUnauthenticated());
+      return;
     }
+
+    emit(AuthStateAuthenticated(
+      userName: user.userName,
+      role: user.role.toLowerCase(),
+      emp_id:user.emp_id
+    ));
   }
 
   Future<void> _onCitizenLoginRequested(
@@ -58,20 +46,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     emit(const AuthStateLoading());
-    final trimmedName = (event.fullName ?? '').trim();
-    final displayName = trimmedName.isNotEmpty
-        ? trimmedName
-        : (event.phone?.trim().isNotEmpty == true
-            ? 'Citizen ${event.phone}'
-            : _demoCitizenName);
-    final user = UserModel(
-      userId: 'CUS-${displayName.replaceAll(' ', '').toUpperCase()}',
-      userName: displayName,
-      role: 'citizen',
-      authToken: 'demo-token-citizen',
-    );
-    await _authRepository.saveUser(user);
-    emit(AuthStateAuthenticatedCitizen(userName: user.userName));
+
+    try {
+      final user = await _authRepository.loginCitizen(
+        username: event.username,
+        password: event.password,
+      );
+
+      await _authRepository.saveUser(user);
+
+      emit(AuthStateAuthenticated(
+        userName: user.userName,
+        role: user.role.toLowerCase(),
+        emp_id: user.emp_id
+      ));
+    } catch (e) {
+      emit(AuthStateFailure(message: e.toString()));
+      emit(const AuthStateUnauthenticated());
+    }
   }
 
   Future<void> _onCitizenRegisterRequested(
@@ -79,16 +71,47 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     emit(const AuthStateLoading());
-    final trimmedName = event.fullName.trim();
-    final userName = trimmedName.isNotEmpty ? trimmedName : _demoCitizenName;
+
+    final userName = event.fullName.trim().isEmpty
+        ? "Citizen Demo"
+        : event.fullName.trim();
+
     final user = UserModel(
-      userId: 'CUS-REG-${userName.replaceAll(' ', '').toUpperCase()}',
+      userId: "CUS-REG-${userName.replaceAll(" ", "")}",
       userName: userName,
-      role: 'citizen',
-      authToken: 'demo-token-citizen',
+      role: "citizen",
+      authToken: "demo-token",
     );
+
     await _authRepository.saveUser(user);
-    emit(AuthStateAuthenticatedCitizen(userName: user.userName));
+
+    emit(AuthStateAuthenticated(
+      userName: user.userName,
+      role: "citizen",
+    ));
+  }
+
+  Future<void> _onOperatorLoginRequested(
+    AuthOperatorLoginRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(const AuthStateLoading());
+
+    final user = UserModel(
+      userId: event.operatorId,
+      userName: event.userName,
+      role: "operator",
+      authToken: "operator-token",
+      emp_id: event.userName
+    );
+
+    await _authRepository.saveUser(user);
+
+    emit(AuthStateAuthenticated(
+      userName: user.userName,
+      role: "operator",
+      emp_id:user.emp_id
+    ));
   }
 
   Future<void> _onLogoutRequested(
@@ -98,22 +121,4 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     await _authRepository.logout();
     emit(const AuthStateUnauthenticated());
   }
-Future<void> _onOperatorLoginRequested(
-  AuthOperatorLoginRequested event,
-  Emitter<AuthState> emit,
-) async {
-  emit(const AuthStateLoading());
-
-  final user = UserModel(
-    userId: event.operatorId,
-    userName: event.userName,
-    role: 'operator',
-    authToken: 'operator-token',
-  );
-
-  await _authRepository.saveUser(user);
-
-  emit(AuthStateAuthenticatedOperator(userName: user.userName));
-}
-
 }

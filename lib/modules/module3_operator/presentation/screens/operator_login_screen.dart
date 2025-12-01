@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
+import 'package:iwms_citizen_app/router/app_router.dart';
 
 const Color _operatorPrimary = Color(0xFF1B5E20);
 const Color _operatorAccent = Color(0xFF66BB6A);
@@ -30,6 +31,12 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen> {
     super.initState();
     _checkLocationServices();
     _determinePosition();
+    // Ensure any existing session is cleared when landing on the operator login.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<AuthBloc>().add(AuthLogoutRequested());
+      }
+    });
   }
 
   @override
@@ -197,30 +204,43 @@ Future<void> _handleLogin() async {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final size = MediaQuery.of(context).size;
-    return Scaffold(
-      backgroundColor: _operatorBackground,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            SingleChildScrollView(
-              padding: const EdgeInsets.only(bottom: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHeroHeader(size, theme),
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-                    child: _buildLoginCard(theme),
-                  ),
-                ],
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) {
+          context.read<AuthBloc>().add(AuthLogoutRequested());
+          Future.microtask(() {
+            if (mounted) {
+              context.go(AppRoutePaths.citizenLogin);
+            }
+          });
+        }
+      },
+      child: Scaffold(
+        backgroundColor: _operatorBackground,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              SingleChildScrollView(
+                padding: const EdgeInsets.only(bottom: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeroHeader(size, theme),
+                    Padding(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                      child: _buildLoginCard(theme),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            if (_isLoading)
-              const Center(
-                child: CircularProgressIndicator(color: _operatorPrimary),
-              ),
-          ],
+              if (_isLoading)
+                const Center(
+                  child: CircularProgressIndicator(color: _operatorPrimary),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -244,16 +264,22 @@ Future<void> _handleLogin() async {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            height: size.height * 0.12,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Image.asset(
-                'asset/images/logo.png',
-                height: size.height * 0.1,
-                fit: BoxFit.contain,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              SizedBox(
+                height: size.height * 0.12,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Image.asset(
+                    'asset/images/logo.png',
+                    height: size.height * 0.1,
+                    fit: BoxFit.contain,
+                  ),
+                ),
               ),
-            ),
+              IconButton(onPressed: (){context.push("/select-user");}, icon: Icon(Icons.home,color: Colors.white,))
+            ],
           ),
           const SizedBox(height: 12),
           Text(

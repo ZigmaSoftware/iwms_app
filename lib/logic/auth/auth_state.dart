@@ -1,57 +1,48 @@
-// lib/logic/auth/auth_state.dart
 import 'package:equatable/equatable.dart';
 
-enum UserRole {
-  unknown,
-  unauthenticated,
-  citizen,
-  operator,
-  supervisor,
-  engineer,
-  admin,
-}
-
-class AuthState extends Equatable {
-  final UserRole role;
-  final String? userName;
-
-  const AuthState({this.role = UserRole.unknown, this.userName});
+abstract class AuthState extends Equatable {
+  const AuthState();
 
   @override
-  List<Object?> get props => [role, userName];
+  List<Object?> get props => [];
 }
 
+/// App starting / checking persistence
 class AuthStateInitial extends AuthState {
-  const AuthStateInitial() : super(role: UserRole.unknown);
+  const AuthStateInitial();
 }
 
+/// Any ongoing login or async process
 class AuthStateLoading extends AuthState {
-  const AuthStateLoading() : super(role: UserRole.unknown);
+  const AuthStateLoading();
 }
 
+/// Unified authenticated state
+class AuthStateAuthenticated extends AuthState {
+  final String userName;
+  final String role; // citizen, operator, driver, admin
+  final String ?emp_id; 
+  const AuthStateAuthenticated({
+    required this.userName,
+    required this.role,
+     this.emp_id
+  });
+
+  @override
+  List<Object?> get props => [userName, role,emp_id];
+}
+
+/// Logged out
 class AuthStateUnauthenticated extends AuthState {
-  const AuthStateUnauthenticated() : super(role: UserRole.unauthenticated);
+  const AuthStateUnauthenticated();
 }
 
-abstract class AuthStateAuthenticated extends AuthState {
-  const AuthStateAuthenticated({required super.role, required String super.userName});
-}
-
-class AuthStateAuthenticatedCitizen extends AuthStateAuthenticated {
-  const AuthStateAuthenticatedCitizen({required super.userName})
-      : super(role: UserRole.citizen);
-}
-
+/// Login failure
 class AuthStateFailure extends AuthState {
   final String message;
 
-  const AuthStateFailure({required this.message}) : super(role: UserRole.unknown);
+  const AuthStateFailure({required this.message});
 
   @override
-  List<Object?> get props => [role, userName, message];
-}
-class AuthStateAuthenticatedOperator extends AuthState {
-  final String userName;
-
-  const AuthStateAuthenticatedOperator({required this.userName});
+  List<Object?> get props => [message];
 }

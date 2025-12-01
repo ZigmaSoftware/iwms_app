@@ -1,0 +1,414 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:motion_tab_bar/MotionTabBar.dart';
+
+import '../../../core/di.dart';
+import '../../../core/geofence_config.dart';
+import '../../../data/models/vehicle_model.dart';
+import '../../../logic/vehicle_tracking/vehicle_bloc.dart';
+import '../../../router/app_router.dart';
+import '../../../shared/services/notification_service.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/banner/controllers/banner_controller.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/banner/models/banner_slide.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/banner/services/banner_service.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/home/controllers/home_nav_controller.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/home/widgets/home_tab.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/map/pages/map_tab_page.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/notifications/controllers/notification_controller.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/notifications/models/citizen_alert.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/profile/widgets/profile_tab.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/quick_actions/models/quick_action.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/track/controllers/track_controller.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/track/services/track_service.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/track/widgets/track_tab.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/geofence/utils/geofence_evaluator.dart';
+
+class CitizenDashboardPage extends StatefulWidget {
+  const CitizenDashboardPage({super.key, required this.userName});
+
+  final String userName;
+
+  static const Color darkBackground = Color(0xFF04120A);
+  static const Color darkSurface = Color(0xFF0B2716);
+
+  @override
+  State<CitizenDashboardPage> createState() => _CitizenDashboardPageState();
+}
+
+class _CitizenDashboardPageState extends State<CitizenDashboardPage>
+    with TickerProviderStateMixin {
+  late final BannerController _bannerController;
+  late final TrackController _trackController;
+  late final NotificationController _notificationController;
+  late final HomeNavController _navController;
+  late final GeofenceEvaluator _geofenceEvaluator;
+  DateTime? _lastGeofenceAlertAt;
+
+  late final List<BannerSlide> _fallbackSlides;
+
+  @override
+  void initState() {
+    super.initState();
+    _fallbackSlides = _defaultBannerSlides;
+    _bannerController = BannerController(
+      service: BannerService(),
+      fallbackSlides: _fallbackSlides,
+    );
+    _trackController = TrackController(TrackService());
+    _notificationController = NotificationController(
+      getIt<NotificationService>(),
+    );
+    _navController = HomeNavController();
+    _geofenceEvaluator = const GeofenceEvaluator();
+
+    unawaited(_bannerController.initialize());
+    unawaited(_trackController.refresh(force: true));
+  }
+
+  @override
+  void dispose() {
+    _bannerController.dispose();
+    _trackController.dispose();
+    _navController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    final normalizedName = widget.userName.trim();
+    final showUserName =
+        normalizedName.isNotEmpty && normalizedName.toLowerCase() != 'citizen demo';
+
+    final backgroundColor = isDarkMode
+        ? CitizenDashboardPage.darkBackground
+        : const Color.fromRGBO(235, 248, 239, 1);
+    final surfaceColor =
+        isDarkMode ? CitizenDashboardPage.darkSurface : Colors.white;
+    final outlineColor = isDarkMode
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.black.withValues(alpha: 0.05);
+    final textColor = isDarkMode ? Colors.white : Colors.black87;
+    final secondaryTextColor =
+        isDarkMode ? Colors.white70 : Colors.black54;
+    final highlightColor =
+        isDarkMode ? colorScheme.secondary : colorScheme.primary;
+
+    final quickActions = _buildQuickActions(context);
+
+    final List<Color> sectionHeaderGradientColors = isDarkMode
+        ? const [Color(0xFF0D3A16), Color(0xFF43A047)]
+        : const [Color(0xFF1B5E20), Color(0xFF66BB6A)];
+
+    final responsive = MediaQuery.of(context).size;
+    final double headerHeight = math.min(responsive.height * 0.36, 360);
+
+    Widget buildTabBody(BottomNavItem item) {
+      switch (item) {
+        case BottomNavItem.track:
+          return TrackTab(
+            controller: _trackController,
+            highlightColor: highlightColor,
+            textColor: textColor,
+            onPickDate: () async {
+              final now = DateTime.now();
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: _trackController.selectedDate,
+                firstDate: DateTime(now.year - 2),
+                lastDate: DateTime(now.year + 1, 12, 31),
+              );
+              if (picked != null) {
+                await _trackController.pickDate(picked);
+              }
+            },
+          );
+        case BottomNavItem.map:
+          return const MapTabPage();
+        case BottomNavItem.profile:
+          return ProfileTab(
+            headerHeight: headerHeight,
+            headerGradientColors: sectionHeaderGradientColors,
+            normalizedName: normalizedName,
+            highlightColor: highlightColor,
+            textColor: textColor,
+            secondaryTextColor: secondaryTextColor,
+          );
+        case BottomNavItem.home:
+          return HomeTab(
+            bannerController: _bannerController,
+            trackController: _trackController,
+            notificationController: _notificationController,
+            quickActions: quickActions,
+            userName: normalizedName,
+            showUserName: showUserName,
+            isDarkMode: isDarkMode,
+            surfaceColor: surfaceColor,
+            outlineColor: outlineColor,
+            textColor: textColor,
+            secondaryTextColor: secondaryTextColor,
+            highlightColor: highlightColor,
+          );
+      }
+    }
+
+    return BlocListener<VehicleBloc, VehicleState>(
+      listenWhen: (previous, current) => current is VehicleLoaded,
+      listener: (context, state) {
+        if (state is VehicleLoaded) {
+          _evaluateGeofence(state.vehicles);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: backgroundColor,
+        body: AnimatedBuilder(
+          animation: _navController,
+          builder: (context, _) {
+            final isMapTab = _navController.active == BottomNavItem.map;
+            final body = buildTabBody(_navController.active);
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: isMapTab ? body : SafeArea(child: body),
+                ),
+              ],
+            );
+          },
+        ),
+        bottomNavigationBar: SafeArea(
+          child: MotionTabBar(
+            labels: const ['Home', 'Track', 'Map', 'Profile'],
+            icons: const [
+              Icons.home_outlined,
+              Icons.delete_outline,
+              Icons.map_outlined,
+              Icons.person_outline,
+            ],
+            initialSelectedTab: _labelForNav(_navController.active),
+            tabBarColor: isDarkMode ? CitizenDashboardPage.darkSurface : Colors.white,
+            tabSelectedColor: highlightColor,
+            tabIconColor: isDarkMode ? Colors.white54 : Colors.black54,
+            tabBarHeight: 64,
+            tabSize: 52,
+            tabIconSize: 22,
+            tabIconSelectedSize: 24,
+            onTabItemSelected: (value) {
+              final item = value is int
+                  ? _navFromIndex(value)
+                  : value is String
+                      ? _navFromLabel(value)
+                      : null;
+              if (item != null) _navController.setItem(item);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<QuickAction> _buildQuickActions(BuildContext context) {
+    return [
+      QuickAction(
+        label: 'Track Vehicles',
+        assetPath: 'assets/icons/track_vehicles.png',
+        onTap: () => context.push(AppRoutePaths.citizenMap),
+      ),
+      QuickAction(
+        label: 'Collection Details',
+        assetPath: 'assets/icons/collection_details.png',
+        onTap: () => context.push(AppRoutePaths.citizenDriverDetails),
+      ),
+      QuickAction(
+        label: 'Collection History',
+        assetPath: 'assets/icons/collectionhistory.png',
+        onTap: () => context.push(AppRoutePaths.citizenHistory),
+      ),
+      QuickAction(
+        label: 'Raise Grievance',
+        assetPath: 'assets/icons/raise_grievance.png',
+        onTap: () => context.push(AppRoutePaths.citizenGrievanceChat),
+      ),
+      QuickAction(
+        label: 'Rate Collector',
+        assetPath: 'assets/icons/rate_collector.png',
+        onTap: () => _showComingSoon(context, 'Rating feature'),
+      ),
+      QuickAction(
+        label: 'QR',
+        assetPath: 'assets/icons/qr.png',
+        onTap: () => _showQrDialog(context),
+      ),
+      QuickAction(
+        label: 'Upcoming Collection',
+        assetPath: 'assets/icons/upcoming_collection.png',
+        onTap: () => _showComingSoon(context, 'Upcoming collection schedule'),
+      ),
+    ];
+  }
+
+  void _evaluateGeofence(List<VehicleModel> vehicles) {
+    final hasVehicleInside =
+        vehicles.any((vehicle) => _geofenceEvaluator.isInsideGamma(vehicle));
+
+    final now = DateTime.now();
+    final last = _lastGeofenceAlertAt;
+    final withinCooldown =
+        last != null && now.difference(last) < const Duration(minutes: 5);
+
+    if (hasVehicleInside && !withinCooldown) {
+      const message =
+          'Upcoming collection: our truck is approaching ${GammaGeofenceConfig.name}. '
+          'Please segregate your dry, wet and mixed waste for pickup.';
+      _notificationController.addAlert(
+        CitizenAlert(
+          title: 'Collector arriving soon',
+          message: message,
+          timestamp: DateTime.now(),
+        ),
+      );
+      _lastGeofenceAlertAt = now;
+    }
+  }
+
+  void _showComingSoon(BuildContext context, String feature) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$feature is coming soon.')),
+    );
+  }
+
+  Future<void> _showQrDialog(BuildContext context) async {
+    final theme = Theme.of(context);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'My Collection QR',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Show this code to your collector for instant verification.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 18),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: Image.asset(
+                    'assets/images/qr.png',
+                    width: 240,
+                    height: 240,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  icon: const Icon(Icons.check),
+                  label: const Text('Done'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  BottomNavItem _navFromLabel(String label) {
+    switch (label) {
+      case 'Track':
+        return BottomNavItem.track;
+      case 'Map':
+        return BottomNavItem.map;
+      case 'Profile':
+        return BottomNavItem.profile;
+      case 'Home':
+        return BottomNavItem.home;
+    }
+    return BottomNavItem.home;
+  }
+
+  BottomNavItem _navFromIndex(int index) {
+    const values = [
+      BottomNavItem.home,
+      BottomNavItem.track,
+      BottomNavItem.map,
+      BottomNavItem.profile,
+    ];
+    if (index < 0 || index >= values.length) return values.first;
+    return values[index];
+  }
+
+  String _labelForNav(BottomNavItem item) {
+    switch (item) {
+      case BottomNavItem.track:
+        return 'Track';
+      case BottomNavItem.map:
+        return 'Map';
+      case BottomNavItem.profile:
+        return 'Profile';
+      case BottomNavItem.home:
+        return 'Home';
+    }
+  }
+
+  static const List<BannerSlide> _defaultBannerSlides = [
+    BannerSlide(
+      chipLabel: 'Support',
+      title: 'Report missed pickups instantly',
+      subtitle: 'Our support desk responds within 10 mins.',
+      colors: [Color(0xFF1B5E20), Color(0xFF43A047)],
+      icon: Icons.support_agent,
+      backgroundImage: 'assets/banner/banner1.jpg',
+      subtitleFontSize: 10,
+    ),
+    BannerSlide(
+      chipLabel: 'Pickups',
+      title: 'Track your collector live on map',
+      subtitle: 'Stay ready before the vehicle arrives.',
+      colors: [Color(0xFF1B5E20), Color(0xFF2E7D5A)],
+      icon: Icons.map_outlined,
+      backgroundImage: 'assets/banner/banner3.jpg',
+      subtitleFontSize: 10,
+    ),
+    BannerSlide(
+      chipLabel: 'Segregation',
+      title: 'Smart sorting keeps trucks faster',
+      subtitle: 'Separate dry, wet & mixed waste every morning.',
+      colors: [Color(0xFF1B5E20), Color(0xFF66BB6A)],
+      icon: Icons.auto_awesome,
+      backgroundImage: 'assets/banner/banner2.jpg',
+      subtitleFontSize: 10,
+    ),
+    BannerSlide(
+      chipLabel: 'Rewards',
+      title: 'Earn green points every recycle',
+      subtitle: 'Redeem perks from trusted partners.',
+      colors: [Color(0xFF2E7D5A), Color(0xFF66BB6A)],
+      icon: Icons.star_rate_outlined,
+    ),
+  ];
+}

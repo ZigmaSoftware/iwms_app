@@ -1,0 +1,790 @@
+
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'package:auto_size_text/auto_size_text.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:animated_neumorphic/animated_neumorphic.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
+import 'package:provider/provider.dart';
+import 'package:geolocator/geolocator.dart'; // Import geolocator package
+
+import 'package:http/http.dart'as http;
+// import 'package:zigma_payroll/attendance/userimage.dart';
+
+// import '../provider/username.dart';
+import 'camerapage.dart';
+const Color _operatorPrimary = Color(0xFF1B5E20);
+const Color _operatorAccent = Color(0xFF66BB6A);
+class AttendancePage extends StatefulWidget {
+  const AttendancePage({super.key});
+
+  @override
+  State<AttendancePage> createState() => _AttendancePageState();
+}
+
+class _AttendancePageState extends State<AttendancePage> {
+  final bool _isElevated = false;
+  bool _punchPressed = false;
+  
+  String greetingMessage = "";
+  late String buttonText = "Mark for Today";
+  final bool _isActive = false;
+  String _latitude = '--';
+  String _longitude = '--';
+  DateTime? _checkInTime;
+  DateTime? _checkOutTime;
+  late  String _time;
+  late String _date;
+  Timer? _timer; // Declare a Timer variable
+  bool _isOnline = true;
+  
+  Duration _totalWorkingHours = Duration.zero;
+  String? imageName;
+  bool hasProfile = false;
+bool imageLoading = true;
+  bool isLoading = true;
+  List<Map<String, dynamic>> _pendingSync = [];
+
+  // Helper method to format duration
+  String _formatDuration(Duration duration) {
+    int hours = duration.inHours;
+    int minutes = duration.inMinutes % 60;
+    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
+  }
+  void updateGreeting() {
+    setState(() {
+      greetingMessage = getDynamicGreeting();
+    });
+  }
+
+  String getDynamicGreeting() {
+    var hour = DateTime.now().hour;
+    var weekday = DateTime.now().weekday; // 1 = Monday, 7 = Sunday
+
+    // Define messages for each day of the week
+    Map<int, List<String>> dailyMessages = {
+      1: [ // Monday
+        "Start the week strong!",
+        "New week, new opportunities!",
+        "Set goals and take action!"
+      ],
+      2: [ // Tuesday
+        "Keep up the momentum!",
+        "Small steps lead to big success!",
+        "Stay focused and productive!"
+      ],
+      3: [ // Wednesday
+        "Halfway through—keep going!",
+        "Every challenge is an opportunity!",
+        "Success comes with persistence!"
+      ],
+      4: [ // Thursday
+        "You're almost there!",
+        "Stay determined, results are near!",
+        "Refine your efforts, success is close!"
+      ],
+      5: [ // Friday
+        "Finish strong, weekend ahead!",
+        "Keep going, success follows effort!",
+        "Push through and celebrate progress!"
+      ],
+      6: [ // Saturday
+        "Relax and recharge!",
+        "Balance is key—enjoy today!",
+        "Learn and grow every day!"
+      ],
+      7: [ // Sunday
+        "Reflect and reset for success!",
+        "Take time for yourself!",
+        "Recharge for a productive week!"
+      ]
+
+    };
+
+    // Get a random message from today's set
+    String dailyMessage = (dailyMessages[weekday]!..shuffle()).first;
+
+    // Time-based Greetings
+    if (hour >= 5 && hour < 12) {
+      return "Good Morning! $dailyMessage";
+    } else if (hour >= 12 && hour < 17) {
+      return "Good Afternoon! $dailyMessage";
+    } else if (hour >= 17 && hour < 21) {
+      return "Good Evening! $dailyMessage";
+    } else {
+      return "Good Night! $dailyMessage";
+    }
+  }
+
+
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchLocation();
+      fetchEmployeeImage();  
+ _checkInternetInitial();
+
+  Connectivity().onConnectivityChanged.listen((ConnectivityResult result) async {
+    final hasInternet = await _hasInternet();
+    if (mounted) {
+      setState(() => _isOnline = hasInternet);
+    }
+  });
+    Timer.periodic(Duration(seconds: 1), (Timer t) => _getTime());
+    _updateTimeAndDate();
+   
+    
+    _timer = Timer.periodic(Duration(seconds: 60), (Timer timer) {
+     
+    });
+    greetingMessage = getDynamicGreeting();
+    _pendingSync = [
+  {
+    "type": "Check In",
+    "timestamp": "2025-01-20 09:15 AM",
+    "lat": "11.0205",
+    "long": "76.9760",
+  },
+  {
+    "type": "Check Out",
+    "timestamp": "2025-01-20 05:45 PM",
+    "lat": "11.0210",
+    "long": "76.9781",
+  },
+
+];
+  }
+  void _checkInternetInitial() async {
+  final hasNet = await _hasInternet();
+  setState(() {
+    _isOnline = hasNet;
+  });
+}
+Future<void> fetchEmployeeImage() async {
+  final authState = context.read<AuthBloc>().state;
+
+  if (authState is! AuthStateAuthenticated) return;
+
+  final empId = authState.emp_id ?? "";
+
+  try {
+    final response = await http.get(
+      Uri.parse("http://10.64.151.226:8000/api/mobile/employee/$empId"),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+
+      setState(() {
+        hasProfile = true;
+        imageName = data["image_path"];     // Full path from backend
+        imageLoading = false;
+      });
+    } else {
+      setState(() {
+        hasProfile = false;
+        imageLoading = false;
+      });
+    }
+  } catch (e) {
+    setState(() {
+      hasProfile = false;
+      imageLoading = false;
+    });
+  }
+}
+String convertToUrl(String path) {
+  final filename = path.split("\\").last;
+  return "http://10.64.151.226:8000/media/emp_image/$filename";
+}
+
+ Future<bool> _hasInternet() async {
+  try {
+    final result = await InternetAddress.lookup('one.one.one.one')
+        .timeout(Duration(seconds: 2));
+
+    return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+  } catch (_) {
+    return false;
+  }
+}
+
+
+  void _updateTimeAndDate() {
+    final now = DateTime.now();
+    _time = DateFormat('hh:mm a').format(now); // Format time as 09:00 AM
+    _date = DateFormat('MMMM dd, yyyy - EEEE').format(now); // Format date as Jan 13, 2025 - Monday
+    setState(() {}); // Update the UI
+  }
+  void _getTime() {
+    final DateTime now = DateTime.now();
+    final String formattedDateTime = _formatDateTime(now);
+    setState(() {
+      _time = formattedDateTime;
+    });
+  }
+  String _formatDateTime(DateTime dateTime) {
+    return DateFormat('hh:mm a').format(dateTime);
+  }
+  Future<void> _fetchLocation() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    // Check if location services are enabled
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      // Location services are not enabled
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Please enable location services.")),
+      );
+      return;
+    }
+
+    // Check for location permissions
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        // Permissions are denied
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Location permission is required.")),
+        );
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      // Permissions are permanently denied
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Location permissions are permanently denied.")),
+      );
+      return;
+    }
+
+    // Get the current location
+    Position position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+
+    setState(() {
+      _latitude = position.latitude.toString();
+      _longitude = position.longitude.toString();
+    });
+    print(_latitude);
+  }
+  Future<bool> _onWillPop() async {
+    return (await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Are you sure?'),
+        content: const Text('Do you want to exit the app?'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('No'),
+          ),
+          TextButton(
+            onPressed: () => exit(0),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    )) ??
+        false;
+  }
+  Widget _networkStatusChip() {
+  final bool online = _isOnline;
+
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    decoration: BoxDecoration(
+      color: online ? Colors.green.shade500 : Colors.red.shade600,
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Row(
+      children: [
+        Icon(Icons.circle, color: Colors.white, size: 10),
+        const SizedBox(width: 6),
+        Text(
+          online ? "Online" : "Offline",
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _pendingSyncTile(Map<String, dynamic> item) {
+  return GestureDetector(
+    onTap: () => _syncItem(item),
+    child: Container(
+      margin: EdgeInsets.only(bottom: 10),
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(item["type"],
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16)),
+              Text(item["timestamp"],
+                  style: TextStyle(fontSize: 13, color: Colors.grey)),
+            ],
+          ),
+          Icon(Icons.sync, color: Colors.orange),
+        ],
+      ),
+    ),
+  );
+}
+
+@override
+Widget build(BuildContext context) {
+  // final userName = " 1";
+  // final empid = "504";
+final authState = context.watch<AuthBloc>().state;
+
+String userName = "";
+String empid = "";
+
+if (authState is AuthStateAuthenticated) {
+  userName = authState.userName;
+  empid = authState.emp_id ?? "";
+}
+
+  return SafeArea(
+    child: Scaffold(
+      backgroundColor: Colors.grey.shade100,
+
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+
+            // ===========================
+            //        HEADER CARD
+            // ===========================
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.fromLTRB(20, 25, 20, 30),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                    colors: [
+                      _operatorPrimary,
+                      _operatorAccent
+                      // Color(0xFF007BFF),
+                      // Color(0xFF00AEEF),
+                    ]),
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(35),
+                ),
+              ),
+
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                 // PROFILE ROW
+                  Row(
+                    children: [
+                   
+
+GestureDetector(
+  onTap: () {
+    if (!hasProfile) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ProfilePage(empId: empid)),
+      );
+    }
+  },
+  child: CircleAvatar(
+    radius: 40,
+    backgroundColor: Colors.white,
+
+    backgroundImage: (hasProfile && imageName != null)
+        ? NetworkImage(convertToUrl(imageName!))
+        : null,
+
+    child: imageLoading
+        ? CircularProgressIndicator(color: Colors.green)
+        : (!hasProfile)
+            ? Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.person_add_alt_1,
+                      size: 35, color: Colors.green),
+                  SizedBox(height: 4),
+                  Text("Register",
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green))
+                ],
+              )
+            : null,
+  ),
+),
+
+                      SizedBox(width: 15),
+
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              userName,
+                              style: TextStyle(
+                                fontSize: 22,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              "EMP ID : $empid",
+                              style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      ),
+  _networkStatusChip(),
+
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            SizedBox(height: 15),
+
+
+Container(
+  margin: EdgeInsets.symmetric(horizontal: 20),
+  padding: EdgeInsets.symmetric(vertical: 22, horizontal: 16),
+  decoration: BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(24),
+    boxShadow: [
+      BoxShadow(
+        blurRadius: 12,
+        spreadRadius: 2,
+        color: Colors.black12.withOpacity(0.07),
+        offset: Offset(0, 4),
+      )
+    ],
+  ),
+  child: Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      _kpiItem(Icons.calendar_today, "20", "Presence"),
+      _kpiItem(Icons.timer_off_rounded, "3", "Leaves"),
+      _kpiItem(Icons.access_time_filled, "2", "Permission"),]
+  ),
+),
+
+            SizedBox(height: 20),
+
+            // ===========================
+            //     CHECK-IN OUT CARD
+            // ===========================
+            Container(
+              padding: EdgeInsets.all(22),
+              margin: EdgeInsets.symmetric(horizontal: 20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                    blurRadius: 8,
+                    color: Colors.black12,
+                    offset: Offset(0, 3),
+                  )
+                ],
+              ),
+
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    DateFormat('dd MMMM yyyy').format(DateTime.now()),
+                    style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w700),
+                  ),
+
+                  SizedBox(height: 15),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _checkBox(
+                        title: "Check In",
+                        time: _checkInTime != null
+                            ? "${_checkInTime!.hour}:${_checkInTime!.minute.toString().padLeft(2, '0')}"
+                            : "--:--",
+                        color: Colors.green,
+                      ),
+                      _checkBox(
+                        title: "Check Out",
+                        time: _checkOutTime != null
+                            ? "${_checkOutTime!.hour}:${_checkOutTime!.minute.toString().padLeft(2, '0')}"
+                            : "--:--",
+                        color: Colors.orange,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            SizedBox(height: 20),
+
+  
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _quickAction(Icons.logout, "Leave"),
+                _quickAction(Icons.place, "Visit"),
+                _quickAction(Icons.timer, "Overtime"),
+                _quickAction(Icons.history, "History"),
+              ],
+            ),
+
+     SizedBox(height: 25),
+
+GestureDetector(
+  onTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CameraScreen(
+      employeeName:userName ,
+     employeeId: empid,userName: userName,
+        ),
+      ),
+    );
+  },
+  
+  onTapDown: (_) => setState(() => _punchPressed = true),
+  onTapUp: (_) => setState(() => _punchPressed = false),
+  child: AnimatedContainer(
+    duration: Duration(milliseconds: 150),
+    curve: Curves.easeOut,
+    padding: EdgeInsets.all(18),
+    margin: EdgeInsets.symmetric(horizontal: 24),
+    height: 90,
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: Colors.green.shade700, width: 2),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.green.withOpacity(0.2),
+          blurRadius: 12,
+        ),
+      ],
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.fingerprint, size: 40, color: Colors.green.shade800),
+        SizedBox(width: 12),
+        Text(
+          "Punch Attendance",
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: Colors.green.shade900,
+          ),
+        ),
+      ],
+    ),
+  ),
+),
+
+
+            SizedBox(height: 25),
+
+if (_pendingSync.isNotEmpty)
+  Container(
+    width: double.infinity,
+    margin: EdgeInsets.symmetric(horizontal: 20),
+    padding: EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black12,
+          blurRadius: 6,
+          offset: Offset(0, 3),
+        )
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "Pending Sync",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Colors.deepOrange,
+              ),
+            ),
+            Icon(Icons.sync_problem, color: Colors.deepOrange),
+          ],
+        ),
+        SizedBox(height: 10),
+
+        ..._pendingSync.map((item) => _pendingSyncTile(item)).toList(),
+      ],
+    ),
+  ),
+
+          ],
+        ),
+      ),
+    ),
+  );
+}
+Future<void> _syncItem(Map<String, dynamic> item) async {
+  if (!_isOnline) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("No internet. Cannot sync.")),
+    );
+    return;
+  }
+
+  try {
+    final response = await http.post(
+      Uri.parse("https://zigma/api/attendance/sync.php"),
+      body: {
+        "timestamp": item["timestamp"],
+        "lat": item["lat"],
+        "long": item["long"],
+        "type": item["type"],
+      },
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (data["status"] == "success") {
+      _pendingSync.remove(item);
+      setState(() {});
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Synced successfully.")),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Sync failed.")),
+      );
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Error syncing.")),
+    );
+  }
+}
+
+
+/// CHECK IN / OUT BOX
+Widget _checkBox({required String title, required String time, required Color color}) {
+  return Container(
+    width: 130,
+    padding: EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.15),
+      borderRadius: BorderRadius.circular(18),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(time,
+            style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+                color: color)),
+        SizedBox(height: 6),
+        Text(title,
+            style: TextStyle(
+                fontSize: 16,
+                color: Colors.black87,
+                fontWeight: FontWeight.w600)),
+      ],
+    ),
+  );
+}
+
+/// QUICK ACTION ICON
+Widget _quickAction(IconData icon, String title) {
+  return Column(
+    children: [
+      Container(
+        height: 55,
+        width: 55,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              blurRadius: 8,
+              color: Colors.black12,
+            )
+          ],
+        ),
+        child: Icon(icon, size: 28, color: Color(0xFF1B5E20)),
+      ),
+      SizedBox(height: 6),
+      Text(title,
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+    ],
+  );
+}
+Widget _kpiItem(IconData icon, String value, String title) {
+  return Column(
+    children: [
+ 
+      Text(
+        value,
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          color: Colors.black87,
+        ),
+      ),
+      SizedBox(height: 2),
+      Text(
+        title,
+        style: TextStyle(
+          fontSize: 13,
+          color: Colors.black54,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    ],
+  );
+}
+}
