@@ -1,0 +1,434 @@
+
+class WeighViewModel(app: Application) : AndroidViewModel(app) {
+
+    private val repo = BluetoothRepository()
+    private var readJob: kotlinx.coroutines.Job? = null
+
+    private val _latestRaw = MutableStateFlow("--")
+    val latestRaw: StateFlow<String> = _latestRaw.asStateFlow()
+
+    private val _latestWeight = MutableStateFlow("--")
+    val latestWeight: StateFlow<String> = _latestWeight.asStateFlow()
+
+    val isConnected = repo.connected
+    var screenUniqueId = mutableStateOf(UniqueIdService.generateScreenUniqueId())
+    var wasteTypes = mutableStateMapOf<String, WasteType>()
+
+    // Local DB
+    private val db = AppDatabase.getDatabase(app)
+    private val dao = db.pendingRecordDao()
+
+    // Online/offline tracking
+    private val _isOnline = MutableStateFlow(checkInternet())
+    val isOnline: StateFlow<Boolean> = _isOnline.asStateFlow()
+
+    init {
+        fetchWasteTypes()
+        // Keep checking network every few seconds
+        viewModelScope.launch(Dispatchers.IO) {
+            while (true) {
+                _isOnline.value = checkInternet()
+                kotlinx.coroutines.delay(5000) // check every 5 seconds
+            }
+        }
+
+    }
+
+    /** -------------------
+     * Fetch waste types
+     * ------------------- */
+    private fun fetchWasteTypes() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val client = OkHttpClient()
+                val req = Request.Builder()
+                    .url("https://zigma.in/iwms_app/api/waste/get_waste_type.php")
+                    .build()
+                val resp = client.newCall(req).execute()
+                val data = JSONObject(resp.body?.string() ?: "{}")
+                if (data.optString("status") == "success") {
+                    val list = data.getJSONArray("data")
+                    for (i in 0 until list.length()) {
+                        val item = list.getJSONObject(i)
+                        val name = item.getString("waste_type_name").lowercase()
+                        wasteTypes[name] = WasteType(
+                            id = item.getString("id"),
+                            name = item.getString("waste_type_name")
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("WeighVM", "Error fetching waste types", e)
+            }
+        }
+    }
+
+    fun submitForm(customerId: String, context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val pending = dao.getAll().filter { it.customerId == customerId }
+
+                if (pending.isEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "No pending records to submit", Toast.LENGTH_SHORT).show()
+                    }
+                    return@launch
+                }
+
+                var successCount = 0
+                for (record in pending) {
+                    val uploaded = uploadWaste(record, false, null)
+                    if (uploaded != null) {
+                        dao.deleteById(record.id)
+                        successCount++
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    if (successCount > 0)
+                        Toast.makeText(context, "✅ Submitted $successCount records", Toast.LENGTH_SHORT).show()
+                    else
+                        Toast.makeText(context, "⚠️ Submission failed. Try again later.", Toast.LENGTH_SHORT).show()
+                }
+
+            } catch (e: Exception) {
+                Log.e("WeighVM", "Error in submitForm", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Error submitting records", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+
+    /** -------------------
+     * Bluetooth Connect
+     * ------------------- */
+    fun connect() {
+        viewModelScope.launch {
+            val context = getApplication<Application>().applicationContext
+            if (repo.connect(context)) startReader()
+            else _latestRaw.value = "❌ Bluetooth connection failed"
+        }
+    }
+
+    fun disconnect() {
+        viewModelScope.launch {
+            readJob?.cancel()
+            repo.disconnect()
+            _latestRaw.value = "🔌 Disconnected"
+        }
+    }
+
+    private fun startReader() {
+        readJob?.cancel()
+        readJob = viewModelScope.launch {
+            repo.latestWeight.collectLatest { line ->
+                _latestRaw.value = line
+                _latestWeight.value = line
+                val active = wasteTypes.values.firstOrNull { !it.isAdded.value }
+                active?.weight = line
+            }
+        }
+    }
+
+    /** -------------------
+     * Add / Update Waste
+     * ------------------- */
+    fun handleAdd(
+        type: String,
+        customerId: String,
+        context: Context,
+        latitude: Double? = null,
+        longitude: Double? = null
+    ) {
+        val waste = wasteTypes[type] ?: return
+
+        if (waste.image == null) {
+            Toast.makeText(context, "Capture image for ${waste.name} first", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (_latestWeight.value == "--") {
+            Toast.makeText(context, "Record weight for ${waste.name}", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        waste.latitude = latitude
+        waste.longitude = longitude
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val localRecord = PendingRecord(
+                    customerId = customerId,
+                    customerName = waste.name,
+                    customerAddress = "Offline Entry",
+                    wasteType = waste.id, // ✅ send the numeric ID, not name
+                    weight = _latestWeight.value,
+                    latitude = latitude,
+                    longitude = longitude,
+                    imagePath = saveBitmapToFile(context, waste.image!!)
+                )
+
+                val hasInternet = checkInternet() // 🔹 Fresh check right now
+
+                if (hasInternet) {
+                    val uploaded = uploadWaste(localRecord, waste.isAdded.value, waste.uniqueId)
+                    if (uploaded != null) {
+                        waste.isAdded.value = true
+                        waste.uniqueId = uploaded
+
+                        // 🔹 Fetch latest data immediately after upload
+                        fetchWasteRecord(waste, customerId, context)
+
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "${waste.name} uploaded successfully", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    else {
+                        // upload failed even though online
+                        dao.insert(localRecord)
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "⚠️ Upload failed, saved locally", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } else {
+                    // truly offline
+                    dao.insert(localRecord)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "📴 Offline – saved ${waste.name} locally", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+            } catch (e: Exception) {
+                Log.e("WeighVM", "Error saving ${waste.name}", e)
+            }
+        }
+    }
+
+    /** -------------------
+     * Fetch saved waste record (after add/update)
+     * ------------------- */
+    private fun fetchWasteRecord(waste: WasteType, customerId: String, context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val body = MultipartBody.Builder().setType(MultipartBody.FORM)
+                    .addFormDataPart("screen_unique_id", screenUniqueId.value)
+                    .addFormDataPart("customer_id", customerId)
+                    .addFormDataPart("waste_type", waste.id)
+                    .build()
+
+                val req = Request.Builder()
+                    .url("https://zigma.in/iwms_app/api/waste/get_saved_waste.php")
+                    .post(body)
+                    .build()
+
+                val client = OkHttpClient()
+                val resp = client.newCall(req).execute()
+                val json = JSONObject(resp.body?.string() ?: "{}")
+
+                if (json.optString("status") == "success") {
+                    val data = json.optJSONObject("data")
+                    withContext(Dispatchers.Main) {
+                        waste.uniqueId = data?.optString("unique_id")
+                        waste.finalWeight.value = data?.optString("weight")
+                        waste.isAdded.value = true
+                        Toast.makeText(context, "✅ Synced ${waste.name}", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "⚠️ Could not fetch latest data for ${waste.name}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("WeighVM", "⚠️ Error fetching waste record", e)
+            }
+        }
+    }
+
+
+    /** -------------------
+     * Upload single waste record
+     * ------------------- */
+    private fun uploadWaste(record: PendingRecord, isUpdate: Boolean, uniqueId: String?): String? {
+        return try {
+            val url = if (isUpdate) {
+                "https://zigma.in/iwms_app/api/waste/update_waste_sub.php"
+            } else {
+                "https://zigma.in/iwms_app/api/waste/insert_waste_sub.php"
+            }
+
+            val file = File(record.imagePath)
+            val baos = file.inputStream().use { it.readBytes() }
+
+            val bodyBuilder = MultipartBody.Builder().setType(MultipartBody.FORM)
+                .addFormDataPart("screen_unique_id", screenUniqueId.value)
+                .addFormDataPart("customer_id", record.customerId)
+                .addFormDataPart("waste_type", record.wasteType)
+                .addFormDataPart("weight", record.weight)
+                .apply { record.latitude?.let { addFormDataPart("latitude", it.toString()) } }
+                .apply { record.longitude?.let { addFormDataPart("longitude", it.toString()) } }
+                .addFormDataPart("image", file.name, baos.toRequestBody("image/jpeg".toMediaType()))
+
+            uniqueId?.let { bodyBuilder.addFormDataPart("id", it) }
+
+            val client = OkHttpClient()
+            val resp = client.newCall(Request.Builder().url(url).post(bodyBuilder.build()).build()).execute()
+            val json = JSONObject(resp.body?.string() ?: "{}")
+
+            if (json.optString("status") == "success") {
+                val data = json.opt("data")
+                when (data) {
+                    is JSONObject -> data.optString("unique_id")
+                    is org.json.JSONArray -> data.optJSONObject(0)?.optString("unique_id")
+                    else -> "OK" // fallback just to mark success even if unique_id missing
+                }
+            } else {
+                null
+            }
+
+
+
+
+
+        } catch (e: Exception) {
+            Log.e("WeighVM", "Upload failed", e)
+            null
+        }
+    }
+
+    /** -------------------
+     * Sync all offline records
+     * ------------------- */
+    fun syncPendingRecords() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val pending = dao.getAll()
+            if (pending.isEmpty()) return@launch
+
+            for (record in pending) {
+                val uploaded = uploadWaste(record, false, null)
+                if (uploaded != null) {
+                    dao.deleteById(record.id)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(getApplication(), "✅ Synced ${record.customerId}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    }
+
+    /** -------------------
+     * Save bitmap to file
+     * ------------------- */
+    private fun saveBitmapToFile(context: Context, bitmap: Bitmap): String {
+        val file = File(context.filesDir, "waste_${System.currentTimeMillis()}.jpg")
+        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+        return file.absolutePath
+    }
+
+    /** -------------------
+     * Check internet availability
+     * ------------------- */
+    private fun checkInternet(): Boolean {
+        return try {
+            Socket().use { it.connect(InetSocketAddress("8.8.8.8", 53), 1500) }
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+}
+
+
+
+
+
+package com.example.weighreader.local
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+
+@Dao
+interface PendingRecordDao {
+    // Save or update a record locally
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(record: PendingRecord)
+
+    // Fetch all unsynced records
+    @Query("SELECT * FROM pending_records")
+    suspend fun getAll(): List<PendingRecord>
+
+    // Delete record after successful sync
+    @Query("DELETE FROM pending_records WHERE id = :id")
+    suspend fun deleteById(id: Int)
+
+    // Optional: clear all (useful for debugging)
+    @Query("DELETE FROM pending_records")
+    suspend fun clearAll()
+}
+
+
+
+package com.example.weighreader.local
+
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+
+@Entity(tableName = "pending_records")
+data class PendingRecord(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val customerId: String,
+    val customerName: String,
+    val customerAddress: String,
+    val wasteType: String,
+    val weight: String,
+    val latitude: Double?,
+    val longitude: Double?,
+    val imagePath: String, // store path instead of bitmap
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+
+
+package com.example.weighreader.local
+
+import android.content.Context
+import androidx.room.Database
+import androidx.room.Room
+import androidx.room.RoomDatabase
+
+// ✅ Add exportSchema = false (optional but avoids warnings)
+// ✅ Room needs a concrete entity list and a version number
+@Database(
+    entities = [PendingRecord::class],
+    version = 1,
+    exportSchema = false
+)
+abstract class AppDatabase : RoomDatabase() {
+
+    abstract fun pendingRecordDao(): PendingRecordDao
+
+    companion object {
+        @Volatile
+        private var INSTANCE: AppDatabase? = null
+
+        fun getDatabase(context: Context): AppDatabase {
+            return INSTANCE ?: synchronized(this) {
+                val instance = Room.databaseBuilder(
+                    context.applicationContext,
+                    AppDatabase::class.java,
+                    "weighreader_db"
+                )
+                    // ✅ This ensures Room regenerates the schema when it changes,
+                    // preventing migration crashes during development.
+                    .fallbackToDestructiveMigration()
+                    .build()
+
+                INSTANCE = instance
+                instance
+            }
+        }
+    }
+}

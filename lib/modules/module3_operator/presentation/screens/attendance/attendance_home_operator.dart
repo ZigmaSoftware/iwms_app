@@ -1,4 +1,4 @@
-
+// import 'dart:async';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -7,9 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:animated_neumorphic/animated_neumorphic.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart'; // Import geolocator package
 
@@ -30,7 +27,7 @@ class AttendancePage extends StatefulWidget {
 class _AttendancePageState extends State<AttendancePage> {
   final bool _isElevated = false;
   bool _punchPressed = false;
-  
+
   String greetingMessage = "";
   late String buttonText = "Mark for Today";
   final bool _isActive = false;
@@ -45,8 +42,6 @@ class _AttendancePageState extends State<AttendancePage> {
   
   Duration _totalWorkingHours = Duration.zero;
   String? imageName;
-  bool hasProfile = false;
-bool imageLoading = true;
   bool isLoading = true;
   List<Map<String, dynamic>> _pendingSync = [];
 
@@ -61,7 +56,29 @@ bool imageLoading = true;
       greetingMessage = getDynamicGreeting();
     });
   }
+  // Future<void> fetchAndSetImage() async {
+  //   try {
+  //     final userProvider = Provider.of<UserProvider>(context, listen: false);
+  //     String empId = userProvider.empid; // Get the empid
+  //     print("Fetching image for empId: $empId");
 
+  //     final fetchedImageName = await fetchImageName(empId); // Fetch the image name
+  //     print("Fetched image name from API: $fetchedImageName");
+
+  //     setState(() {
+  //       imageName = fetchedImageName;
+  //       isLoading = false;
+  //     });
+  //   } catch (e) {
+  //     setState(() {
+  //       isLoading = false;
+  //     });
+  //     // print("Error occurred: $e");
+  //     // ScaffoldMessenger.of(context).showSnackBar(
+  //     //   SnackBar(content: Text("Error fetching image: $e")),
+  //     // );
+  //   }
+  // }
   String getDynamicGreeting() {
     var hour = DateTime.now().hour;
     var weekday = DateTime.now().weekday; // 1 = Monday, 7 = Sunday
@@ -127,7 +144,7 @@ bool imageLoading = true;
   void initState() {
     super.initState();
     _fetchLocation();
-      fetchEmployeeImage();  
+   
  _checkInternetInitial();
 
   Connectivity().onConnectivityChanged.listen((ConnectivityResult result) async {
@@ -138,10 +155,10 @@ bool imageLoading = true;
   });
     Timer.periodic(Duration(seconds: 1), (Timer t) => _getTime());
     _updateTimeAndDate();
-   
-    
+    // fetchAndSetImage();
+    // _fetchAttendanceData();
     _timer = Timer.periodic(Duration(seconds: 60), (Timer timer) {
-     
+      // _fetchAttendanceData();
     });
     greetingMessage = getDynamicGreeting();
     _pendingSync = [
@@ -166,44 +183,6 @@ bool imageLoading = true;
     _isOnline = hasNet;
   });
 }
-Future<void> fetchEmployeeImage() async {
-  final authState = context.read<AuthBloc>().state;
-
-  if (authState is! AuthStateAuthenticated) return;
-
-  final empId = authState.emp_id ?? "";
-
-  try {
-    final response = await http.get(
-      Uri.parse("http://10.64.151.226:8000/api/mobile/employee/$empId"),
-    );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-
-      setState(() {
-        hasProfile = true;
-        imageName = data["image_path"];     // Full path from backend
-        imageLoading = false;
-      });
-    } else {
-      setState(() {
-        hasProfile = false;
-        imageLoading = false;
-      });
-    }
-  } catch (e) {
-    setState(() {
-      hasProfile = false;
-      imageLoading = false;
-    });
-  }
-}
-String convertToUrl(String path) {
-  final filename = path.split("\\").last;
-  return "http://10.64.151.226:8000/media/emp_image/$filename";
-}
-
  Future<bool> _hasInternet() async {
   try {
     final result = await InternetAddress.lookup('one.one.one.one')
@@ -357,17 +336,8 @@ Widget _pendingSyncTile(Map<String, dynamic> item) {
 
 @override
 Widget build(BuildContext context) {
-  // final userName = " 1";
-  // final empid = "504";
-final authState = context.watch<AuthBloc>().state;
-
-String userName = "";
-String empid = "";
-
-if (authState is AuthStateAuthenticated) {
-  userName = authState.userName;
-  empid = authState.emp_id ?? "";
-}
+  final userName = "Operator 1";
+  final empid = "504";
 
   return SafeArea(
     child: Scaffold(
@@ -404,44 +374,18 @@ if (authState is AuthStateAuthenticated) {
                  // PROFILE ROW
                   Row(
                     children: [
-                   
-
-GestureDetector(
-  onTap: () {
-    if (!hasProfile) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => ProfilePage(empId: empid)),
-      );
-    }
-  },
-  child: CircleAvatar(
-    radius: 40,
-    backgroundColor: Colors.white,
-
-    backgroundImage: (hasProfile && imageName != null)
-        ? NetworkImage(convertToUrl(imageName!))
-        : null,
-
-    child: imageLoading
-        ? CircularProgressIndicator(color: Colors.green)
-        : (!hasProfile)
-            ? Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.person_add_alt_1,
-                      size: 35, color: Colors.green),
-                  SizedBox(height: 4),
-                  Text("Register",
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green))
-                ],
-              )
-            : null,
-  ),
-),
+                      CircleAvatar(
+                        radius: 40,
+                        backgroundColor: Colors.white,
+                        backgroundImage: imageName != null
+                            ? NetworkImage(
+                                'http://zigfly.in:5000/uploads/$imageName')
+                            : null,
+                        child: imageName == null
+                            ? Icon(Icons.person,
+                                size: 45, color: Colors.grey)
+                            : null,
+                      ),
 
                       SizedBox(width: 15),
 
@@ -476,7 +420,33 @@ GestureDetector(
 
             SizedBox(height: 15),
 
+            // ===========================
+            //           KPI ROW
+            // ===========================
+            // Container(
+            //   margin: EdgeInsets.symmetric(horizontal: 20),
+            //   padding: EdgeInsets.all(18),
+            //   decoration: BoxDecoration(
+            //     color: Colors.white,
+            //     borderRadius: BorderRadius.circular(22),
+            //     boxShadow: [
+            //       BoxShadow(
+            //         blurRadius: 8,
+            //         color: Colors.black12,
+            //         offset: Offset(0, 3),
+            //       )
+            //     ],
+            //   ),
 
+            //   child: Row(
+            //     mainAxisAlignment: MainAxisAlignment.spaceAround,
+            //     children: [
+            //       _kpiItem("20 Days", "Presence"),
+            //       _kpiItem("3 Times", "Leaves"),
+            //       _kpiItem("2 Times", "Permission"),
+            //     ],
+            //   ),
+            // ),
 Container(
   margin: EdgeInsets.symmetric(horizontal: 20),
   padding: EdgeInsets.symmetric(vertical: 22, horizontal: 16),
@@ -571,18 +541,6 @@ Container(
      SizedBox(height: 25),
 
 GestureDetector(
-  onTap: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CameraScreen(
-      employeeName:userName ,
-     employeeId: empid,userName: userName,
-        ),
-      ),
-    );
-  },
-  
   onTapDown: (_) => setState(() => _punchPressed = true),
   onTapUp: (_) => setState(() => _punchPressed = false),
   child: AnimatedContainer(
@@ -620,6 +578,77 @@ GestureDetector(
   ),
 ),
 
+            // ===========================
+            //   PUNCH ATTENDANCE BUTTON
+//           GestureDetector(
+//   onTapDown: (_) => setState(() => _punchPressed = true),
+//   onTapUp: (_) => setState(() => _punchPressed = false),
+//   onTapCancel: () => setState(() => _punchPressed = false),
+//   onTap: () async {
+//     final result = await Navigator.push(
+//       context,
+//       MaterialPageRoute(
+//         builder: (context) => CameraScreen(
+//           employeeName: userName,
+//           employeeId: empid,
+//         ),
+//       ),
+//     );
+//   },
+
+//   child: AnimatedScale(
+//     duration: Duration(milliseconds: 130),
+//     scale: _punchPressed ? 0.93 : 1.0,
+//     child: Container(
+//       height: 150,
+//       width: 150,
+//       decoration: BoxDecoration(
+//         shape: BoxShape.circle,
+//         gradient: LinearGradient(
+//           colors: [Color(0xFF1B5E20), Color(0xFF66BB6A)],
+//           begin: Alignment.topLeft,
+//           end: Alignment.bottomRight,
+//         ),
+//         boxShadow: [
+//           BoxShadow(
+//             color: Colors.green.withOpacity(0.3),
+//             blurRadius: 16,
+//             spreadRadius: 2,
+//             offset: Offset(0, 6),
+//           ),
+//         ],
+//       ),
+
+//       child: Container(
+//         margin: EdgeInsets.all(6),
+//         decoration: BoxDecoration(
+//           shape: BoxShape.circle,
+//           color: Colors.white,
+//         ),
+//         child: Column(
+//           mainAxisAlignment: MainAxisAlignment.center,
+//           children: [
+//             Icon(Icons.fingerprint,
+//                 size: 55,
+//                 color: Colors.green.shade700),
+//             SizedBox(height: 8),
+//             Text(
+//               "Punch\nAttendance",
+//               textAlign: TextAlign.center,
+//               style: TextStyle(
+//                 fontSize: 15,
+//                 fontWeight: FontWeight.w800,
+//                 color: Colors.green.shade900,
+//               ),
+//             ),
+//           ],
+//         ),
+//       ),
+//     ),
+//   ),
+// ),
+
+            // SizedBox(height: 40),
 
             SizedBox(height: 25),
 
@@ -766,7 +795,15 @@ Widget _quickAction(IconData icon, String title) {
 Widget _kpiItem(IconData icon, String value, String title) {
   return Column(
     children: [
- 
+      // Container(
+      //   padding: EdgeInsets.all(10),
+      //   decoration: BoxDecoration(
+      //     color: color.withOpacity(0.12),
+      //     shape: BoxShape.circle,
+      //   ),
+      //   child: Icon(icon, color: color, size: 22),
+      // ),
+      // SizedBox(height: 8),
       Text(
         value,
         style: TextStyle(

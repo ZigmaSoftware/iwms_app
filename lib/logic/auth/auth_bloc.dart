@@ -37,7 +37,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthStateAuthenticated(
       userName: user.userName,
       role: user.role.toLowerCase(),
-      emp_id:user.emp_id
     ));
   }
 
@@ -58,7 +57,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(AuthStateAuthenticated(
         userName: user.userName,
         role: user.role.toLowerCase(),
-        emp_id: user.emp_id
       ));
     } catch (e) {
       emit(AuthStateFailure(message: e.toString()));
@@ -102,7 +100,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       userName: event.userName,
       role: "operator",
       authToken: "operator-token",
-      emp_id: event.userName
     );
 
     await _authRepository.saveUser(user);
@@ -110,7 +107,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthStateAuthenticated(
       userName: user.userName,
       role: "operator",
-      emp_id:user.emp_id
     ));
   }
 
