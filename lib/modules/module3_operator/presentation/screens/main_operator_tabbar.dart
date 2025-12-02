@@ -8,12 +8,14 @@ import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
+import 'package:iwms_citizen_app/core/theme/app_colors.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_attendance_screen_integration.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_dashboard_models.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_home_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_overview_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_profile_screen.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendance_home_operator.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
 import 'package:go_router/go_router.dart';
 
@@ -101,7 +103,7 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
         return true;
       },
       child: Scaffold(
-        backgroundColor: OperatorTheme.background,
+        backgroundColor: AppColors.background,
         body: SafeArea(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 280),
@@ -124,7 +126,7 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
             ],
             initialSelectedTab: _labelForTab(_activeTab),
             tabBarColor: Colors.white,
-            tabSelectedColor: OperatorTheme.primary,
+            tabSelectedColor: AppColors.primary,
             tabIconColor: Colors.black54,
             tabBarHeight: 64,
             tabSize: 52,
@@ -152,14 +154,31 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
           onLogout: _logout,
           onOpenAttendance: () => _setTab(OperatorNavTab.attendance),
           onOpenProfile: () => _setTab(OperatorNavTab.profile),
+          onOpenHistory: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => AttendanceHistory(empId: session.operatorCode),
+              ),
+            );
+          },
+          onOpenAttendanceSummary: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => AttendancePage(
+                  operatorName: session.displayName,
+                  operatorCode: session.operatorCode,
+                ),
+              ),
+            );
+          },
         );
       case OperatorNavTab.overview:
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-          child: OperatorOverviewScreen(),
-        );
+        return const OperatorOverviewScreen();
       case OperatorNavTab.attendance:
-        return const OperatorAttendanceScreenIntegration();
+        return OperatorAttendanceScreenIntegration(
+          operatorName: session.displayName,
+          operatorCode: session.operatorCode,
+        );
       case OperatorNavTab.profile:
         return OperatorProfileScreen(
           operatorName: session.displayName,

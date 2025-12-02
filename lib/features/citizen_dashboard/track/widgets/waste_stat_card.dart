@@ -31,7 +31,7 @@ class WasteStatCard extends StatelessWidget {
     final surface = theme.colorScheme.surface;
     final borderRadius = BorderRadius.circular(DashboardThemeTokens.radiusXL);
     final screenHeight = MediaQuery.sizeOf(context).height;
-    final double cardHeight = math.min(screenHeight * 0.18, 180);
+    final double cardHeight = math.min(screenHeight * 0.22, 200);
 
     return SizedBox(
       height: cardHeight,
@@ -65,28 +65,21 @@ class WasteStatCard extends StatelessWidget {
               child: Column(
                 children: [
                   Expanded(
-                    child: Container(
+                    child: Image.asset(
+                      assetPath,
                       width: double.infinity,
-                      decoration: BoxDecoration(
-                        image: DecorationImage(
-                          image: AssetImage(assetPath),
-                          fit: BoxFit.cover,
-                          colorFilter: isSelected
-                              ? ColorFilter.mode(
-                                  Colors.black.withValues(alpha: 0.1),
-                                  BlendMode.darken,
-                                )
-                              : null,
-                        ),
-                      ),
+                      fit: BoxFit.cover,
+                      alignment: Alignment(0.2, 0.2),
+                      color: isSelected
+                          ? Colors.black.withValues(alpha: 0.1)
+                          : null,
+                      colorBlendMode: isSelected ? BlendMode.darken : null,
                     ),
                   ),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
                       color: surface,
                       borderRadius: const BorderRadius.only(
@@ -103,7 +96,7 @@ class WasteStatCard extends StatelessWidget {
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: Colors.black87,
                             fontWeight: FontWeight.w700,
-                            fontSize: 12,
+                            fontSize: 11,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -128,7 +121,7 @@ class WasteStatCard extends StatelessWidget {
                               style: theme.textTheme.titleMedium?.copyWith(
                                 color: Colors.black,
                                 fontWeight: FontWeight.w800,
-                                fontSize: 17,
+                                fontSize: 15,
                               ),
                             ),
                           ),

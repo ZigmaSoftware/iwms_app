@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_citizen_app/core/theme/app_colors.dart';
 import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
+
+const LinearGradient _headerGradient = LinearGradient(
+  colors: [AppColors.primary, AppColors.primaryVariant],
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+);
 
 class OperatorHeader extends StatelessWidget {
   const OperatorHeader({
@@ -23,6 +29,12 @@ class OperatorHeader extends StatelessWidget {
   final VoidCallback onLogout;
   final VoidCallback? onMenuTap;
   final bool showAvatar;
+  String toTitleCase(String s) {
+    return s.split(" ").map((word) {
+      if (word.isEmpty) return "";
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    }).join(" ");
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +44,7 @@ class OperatorHeader extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
-        gradient: OperatorTheme.headerGradient,
+        gradient: _headerGradient,
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(32),
           bottomRight: Radius.circular(32),
@@ -84,7 +96,7 @@ class OperatorHeader extends StatelessWidget {
 
         // Name text
         Text(
-          name,
+          toTitleCase(name),
           style: AppTextStyles.heading2.copyWith(
             color: Colors.white,
             height: 1.15,
@@ -94,12 +106,12 @@ class OperatorHeader extends StatelessWidget {
         const SizedBox(height: 4),
 
         // Badge or subtitle
-        Text(
-          subtitle ?? badge,
-          style: AppTextStyles.bodyMedium.copyWith(
-            color: Colors.white70,
-          ),
-        ),
+        // Text(
+        //   subtitle ?? badge,
+        //   style: AppTextStyles.bodyMedium.copyWith(
+        //     color: Colors.white70,
+        //   ),
+        // ),
       ],
     );
   }
@@ -135,32 +147,12 @@ class OperatorHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.map_outlined, color: Colors.white, size: 20),
-          const SizedBox(width: 10),
-
           Expanded(
             child: Text(
               '$ward · $zone',
               style: AppTextStyles.bodyMedium.copyWith(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-
-          // Badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.20),
-              borderRadius: BorderRadius.circular(30),
-            ),
-            child: Text(
-              badge,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-                letterSpacing: .3,
               ),
             ),
           ),
