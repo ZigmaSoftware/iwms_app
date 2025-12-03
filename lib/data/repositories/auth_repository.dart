@@ -32,6 +32,7 @@ class AuthRepository {
   AuthRepository(this._dio, this._prefs);
 
   Future<void> initialize() async {
+    debugPrintOfflineData();
     // Reserved for future init work (e.g., token refresh)
   }
 

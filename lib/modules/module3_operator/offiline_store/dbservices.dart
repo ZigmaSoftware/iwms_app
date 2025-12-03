@@ -41,49 +41,7 @@ class DB {
     """);
   }
 }
-// class UserModeloperator {
-//   final String uniqueId;
-//   final String username;
-//   final String name;
-//   final String role;
-//   final String accessToken;
 
-//   UserModeloperator({
-//     required this.uniqueId,
-//     required this.username,
-//     required this.name,
-//     required this.role,
-//     required this.accessToken,
-//   });
-
-//   factory UserModeloperator.fromApi(Map<String, dynamic> json) {
-//     return UserModeloperator(
-//       uniqueId: json["unique_id"],
-//       username: json["username"],
-//       name: json["name"],
-//       role: json["role"],
-//       accessToken: json["access_token"],
-//     );
-//   }
-
-//   Map<String, dynamic> toJson() => {
-//         "unique_id": uniqueId,
-//         "username": username,
-//         "name": name,
-//         "role": role,
-//         "access_token": accessToken,
-//       };
-
-//   factory UserModeloperator.fromDB(Map<String, dynamic> map) {
-//     return UserModeloperator(
-//       uniqueId: map["unique_id"],
-//       username: map["username"],
-//       name: map["name"],
-//       role: map["role"],
-//       accessToken: map["access_token"],
-//     );
-//   }
-// }
 Future<void> saveOperatorToDB(Map<String, dynamic> apiData, String password) async {
   final db = await DB.instance.database;
   final passHash = sha256.convert(utf8.encode(password)).toString();
@@ -92,7 +50,7 @@ Future<void> saveOperatorToDB(Map<String, dynamic> apiData, String password) asy
     "operator_user",
     {
       "unique_id": apiData["unique_id"]?.toString(),
-      "username": apiData["username"]?.toString(),
+      "username": apiData["name"]?.toString(),
       "name": apiData["name"]?.toString(),
       "role": apiData["role"]?.toString(),
       "access_token": apiData["access_token"]?.toString(),
@@ -115,4 +73,18 @@ Future<Map<String, dynamic>?> getOperatorFromDB(String username) async {
   if (res.isEmpty) return null;
 
   return res.first;
+}
+Future<List<Map<String, dynamic>>> getAllOfflineOperators() async {
+  final db = await DB.instance.database;
+
+  final result = await db.query(
+    "operator_user",
+    orderBy: "username ASC",
+  );
+
+  return result;
+}
+void debugPrintOfflineData() async {
+  final data = await getAllOfflineOperators();
+  print(jsonEncode(data));
 }
