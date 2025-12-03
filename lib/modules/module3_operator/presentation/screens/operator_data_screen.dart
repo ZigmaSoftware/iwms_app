@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io';
+import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/offline/pending_finalize_dao.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/offline/pending_finalize_record.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/bluetoothservices.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/generateunique_id.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/image_compress_service.dart';
@@ -72,7 +74,15 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     Future.delayed(const Duration(seconds: 1), () async {
       debugPrint("♻️ Reinitializing Bluetooth adapter...");
       await FlutterBluetoothSerial.instance.cancelDiscovery();
-      await FlutterBluetoothSerial.instance.requestEnable();
+      final isEnabled =
+          await FlutterBluetoothSerial.instance.isEnabled ?? false;
+      if (!isEnabled) {
+        try {
+          await FlutterBluetoothSerial.instance.requestEnable();
+        } catch (e) {
+          debugPrint("⚠️ Unable to prompt for Bluetooth enable: $e");
+        }
+      }
       await _resetBluetooth();
       await _initBluetooth();
     });
@@ -490,6 +500,8 @@ Future<void> _fetchWasteTypes() async {
   Future<void> _submitForm() async {
     setState(() => _isSubmitting = true);
 
+    final totalWeight = _calculateTotalWeight();
+
     try {
 
       final totalWeight = _calculateTotalWeight();
@@ -585,11 +597,10 @@ Future<void> _fetchWasteTypes() async {
 
   // ==================== UI HELPERS ====================
   Widget _buildCustomerInfo() => Card(
-        color: Colors.white,
-        elevation: 2,
+        color: OperatorTheme.surface,
+        elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4),
-          side: BorderSide(color: Colors.grey.withOpacity(0.3)),
+          borderRadius: OperatorTheme.cardRadius,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -602,8 +613,20 @@ Future<void> _fetchWasteTypes() async {
       );
 
   Widget _infoTile(String label, String value) => ListTile(
-        title: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(value, style: const TextStyle(fontSize: 16)),
+        title: Text(
+          label,
+          style: AppTextStyles.bodyMedium.copyWith(
+            fontWeight: FontWeight.w600,
+            color: OperatorTheme.strongText,
+          ),
+        ),
+        subtitle: Text(
+          value,
+          style: AppTextStyles.bodyMedium.copyWith(
+            fontWeight: FontWeight.w500,
+            color: OperatorTheme.mutedText,
+          ),
+        ),
       );
 
   Widget _buildWasteSection(String type, String displayName) {
@@ -616,12 +639,12 @@ Future<void> _fetchWasteTypes() async {
             : item['weight'];
 
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 10),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: OperatorTheme.cardRadius,
         side: BorderSide(
-          color: (type == activeType) ? Colors.blueAccent : Colors.black12,
-          width: (type == activeType) ? 2 : 1,
+          color: (type == activeType) ? OperatorTheme.primary : Colors.black12,
+          width: (type == activeType) ? 1.5 : 1,
         ),
       ),
       child: Padding(
@@ -657,13 +680,15 @@ Future<void> _fetchWasteTypes() async {
 
             Text(
               "Weight: ${displayWeight == '--' ? '--' : '$displayWeight kg'}",
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              style: AppTextStyles.bodyMedium.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
             ),
 
             const SizedBox(height: 10),
 
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 OutlinedButton.icon(
                   onPressed: () async {
@@ -696,10 +721,7 @@ Future<void> _fetchWasteTypes() async {
                     backgroundColor: isAdded
                         ? Colors.orange.shade600
                         : Colors.green.shade700,
-                  ),
-                  onPressed: () => _handleAdd(type),
-                  icon: Icon(isAdded ? Icons.refresh : Icons.add),
-                  label: Text(isAdded ? "Update" : "Add"),
+                  ), onPressed: () {  }, label:Text("add"),
                 ),
               ],
             ),
@@ -730,9 +752,13 @@ Future<void> _fetchWasteTypes() async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: OperatorTheme.background,
       appBar: AppBar(
-        backgroundColor: const Color.fromRGBO(0, 61, 125, 0.8),
-        title: const Text("Customer Details"),
+        backgroundColor: OperatorTheme.primary,
+        title: Text(
+          "Customer Details",
+          style: AppTextStyles.heading2.copyWith(color: Colors.white),
+        ),
       ),
       body: wasteTypes.isEmpty
           ? const Center(child: CircularProgressIndicator())
@@ -740,7 +766,7 @@ Future<void> _fetchWasteTypes() async {
               children: [
                 Container(
                   width: double.infinity,
-                  color: Colors.blueGrey.shade50,
+                  color: OperatorTheme.accentLight,
                   padding:
                       const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                   child: Text(
@@ -758,7 +784,7 @@ Future<void> _fetchWasteTypes() async {
                     child: Column(
                       children: [
                         _buildCustomerInfo(),
-                        const SizedBox(height: 15),
+                        const SizedBox(height: 12),
                         ...wasteTypes.map((w) {
                           final type =
                               w['waste_type_name'].toString().toLowerCase();
@@ -769,7 +795,7 @@ Future<void> _fetchWasteTypes() async {
                             child: _buildWasteSection(type, name),
                           );
                         }),
-                        const SizedBox(height: 25),
+                        const SizedBox(height: 20),
                         _isSubmitting
                             ? const CircularProgressIndicator()
                             : ElevatedButton(
@@ -780,10 +806,11 @@ Future<void> _fetchWasteTypes() async {
                                       horizontal: 40, vertical: 12),
                                 ),
                                 onPressed: _submitForm,
-                                child: const Text(
+                                child: Text(
                                   'Submit',
-                                  style: TextStyle(
-                                      color: Colors.white, fontSize: 16),
+                                  style: AppTextStyles.labelLarge.copyWith(
+                                    fontSize: 14,
+                                  ),
                                 ),
                               ),
                       ],

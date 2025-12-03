@@ -18,7 +18,8 @@
     <application
         android:label="iwms_citizen_app" 
         android:name="${applicationName}"
-        android:icon="@mipmap/launcher_icon">
+        android:icon="@mipmap/launcher_icon"
+        android:enableOnBackInvokedCallback="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -54,4 +55,3 @@
         </intent>
     </queries>
 </manifest>
-

@@ -22,12 +22,22 @@ class NotificationService {
   Future<void> initialize() async {
     const AndroidInitializationSettings androidInit =
         AndroidInitializationSettings('@mipmap/launcher_icon');
-    const DarwinInitializationSettings iosInit = DarwinInitializationSettings(
-        requestAlertPermission: true,
-        requestBadgePermission: true,
-        requestSoundPermission: true);
-    const InitializationSettings initSettings =
-        InitializationSettings(android: androidInit, iOS: iosInit);
+    const DarwinInitializationSettings darwinInit =
+        DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+    const LinuxInitializationSettings linuxInit = LinuxInitializationSettings(
+      defaultActionName: 'Open notification',
+    );
+
+    const InitializationSettings initSettings = InitializationSettings(
+      android: androidInit,
+      iOS: darwinInit,
+      macOS: darwinInit,
+      linux: linuxInit,
+    );
 
     await _plugin.initialize(initSettings);
 
