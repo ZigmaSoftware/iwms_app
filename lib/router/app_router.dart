@@ -65,9 +65,13 @@ static const String operatorQR = '/operator/qr';
 static const String operatorData = '/operator/data';
 static const String attendanceHomepageOperator = '/operator/attendance/homepage';
 
+  static const String operatorOverview = '/operator/overview';
+  static const String operatorProfile = '/operator/profile';
+  static const String operatorAttendance = '/operator/attendance';
 
   static const String driverLogin = '/driver/login';
   static const String driverHome = '/driver/home';
+
 
   static const String adminHome = '/admin/home';
 }
@@ -273,7 +277,7 @@ class AppRouter {
           return isPublic ? AppRoutePaths.citizenHome : null;
 
         case "operator":
-        return isPublic ? AppRoutePaths.operatorHome : null;
+        return isPublic ? AppRoutePaths.operatorData : null;
 
 
         case "driver":
