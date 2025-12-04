@@ -79,7 +79,7 @@ class OperatorInfoCard extends StatelessWidget {
                 if (trailing != null) trailing!,
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 4),
             child,
           ],
         ),

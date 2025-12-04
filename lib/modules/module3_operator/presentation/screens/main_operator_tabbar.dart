@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:motion_tab_bar/MotionTabBar.dart';
 
 import 'package:iwms_citizen_app/core/di.dart';
 import 'package:iwms_citizen_app/data/models/user_model.dart';
@@ -116,26 +115,33 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
           ),
         ),
         bottomNavigationBar: SafeArea(
-          child: MotionTabBar(
-            labels: const ["Home", "Overview", "Attendance", "Profile"],
-            icons: const [
-              Icons.home_rounded,
-              Icons.dashboard_customize_outlined,
-              Icons.fact_check_outlined,
-              Icons.person_outline_rounded,
+          child: BottomNavigationBar(
+            type: BottomNavigationBarType.fixed,
+            currentIndex: _activeTab.index,
+            onTap: (index) => _setTab(OperatorNavTab.values[index]),
+            selectedItemColor: AppColors.primary,
+            unselectedItemColor: Colors.black54,
+            showUnselectedLabels: true,
+            selectedFontSize: 11,
+            unselectedFontSize: 11,
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.home_rounded),
+                label: "Home",
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.dashboard_customize_outlined),
+                label: "Overview",
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.fact_check_outlined),
+                label: "Attendance",
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.person_outline_rounded),
+                label: "Profile",
+              ),
             ],
-            initialSelectedTab: _labelForTab(_activeTab),
-            tabBarColor: Colors.white,
-            tabSelectedColor: AppColors.primary,
-            tabIconColor: Colors.black54,
-            tabBarHeight: 64,
-            tabSize: 52,
-            tabIconSize: 22,
-            tabIconSelectedSize: 24,
-            onTabItemSelected: (value) {
-              final tab = _tabFromValue(value);
-              if (tab != null) _setTab(tab);
-            },
           ),
         ),
       ),

@@ -70,17 +70,25 @@ class OperatorHistoryTabs extends StatelessWidget {
             child: TabBar(
               labelColor: _historyPrimary,
               unselectedLabelColor: AppColors.textSecondary,
+              labelStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
               indicator: BoxDecoration(
-                color: _historyPrimary.withOpacity(0.12),
+                color: _historyPrimary.withOpacity(0.16),
                 borderRadius: _kChipRadius,
               ),
               tabs: tabs
                   .map(
                     (tab) => Tab(
-                      height: 46,
+                      height: 52,
                       child: Text(
                         tab.label,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
                     ),
                   )

@@ -389,55 +389,38 @@ class _AttendancePageState extends State<AttendancePage> {
               // ===========================
               Container(
                 width: double.infinity,
-                padding: EdgeInsets.fromLTRB(20, 25, 20, 30),
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 26),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        _operatorPrimary,
-                        _operatorAccent
-                        // Color(0xFF007BFF),
-                        // Color(0xFF00AEEF),
-                      ]),
-                  borderRadius: BorderRadius.vertical(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      _operatorPrimary,
+                      _operatorAccent,
+                    ],
+                  ),
+                  borderRadius: const BorderRadius.vertical(
                     bottom: Radius.circular(35),
                   ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // PROFILE ROW
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 40,
-                          backgroundColor: Colors.white,
-                          backgroundImage: imageName != null
-                              ? NetworkImage(
-                                  'http://zigfly.in:5000/uploads/$imageName')
-                              : null,
-                          child: imageName == null
-                              ? Icon(Icons.person, size: 45, color: Colors.grey)
-                              : null,
-                        ),
-                        SizedBox(width: 15),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                userName,
-                                style: AppTextStyles.heading2.copyWith(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        _networkStatusChip(),
-                      ],
+                    Text(
+                      "Attendance",
+                      style: AppTextStyles.heading2.copyWith(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      "Manage today's presence and history",
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),

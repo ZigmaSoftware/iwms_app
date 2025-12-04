@@ -6,7 +6,8 @@ import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/o
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_header.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_qr_button.dart';
 
-const EdgeInsets _pagePadding = EdgeInsets.symmetric(horizontal: 20, vertical: 16);
+const EdgeInsets _pagePadding =
+    EdgeInsets.symmetric(horizontal: 20, vertical: 16);
 
 class OperatorHomeScreen extends StatelessWidget {
   const OperatorHomeScreen({
@@ -84,7 +85,9 @@ class OperatorHomeScreen extends StatelessWidget {
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
                     ),
-                    subtitle: nextSubtitle.isNotEmpty ? nextSubtitle : "Upcoming stop",
+                    subtitle: nextSubtitle.isNotEmpty
+                        ? nextSubtitle
+                        : "Upcoming stop",
                     trailing: Chip(
                       label: Text(
                         nextStatus,
@@ -98,13 +101,6 @@ class OperatorHomeScreen extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        _InfoRowItem(
-                          icon: Icons.timer_outlined,
-                          title: "ETA",
-                          value: nextEta,
-                          expand: false,
-                        ),
-                        const SizedBox(width: 16),
                         _InfoRowItem(
                           icon: Icons.location_pin,
                           title: "Route",
@@ -128,7 +124,7 @@ class OperatorHomeScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   OperatorInfoCard(
                     title: "Last collected",
                     titleStyle: const TextStyle(
@@ -137,10 +133,17 @@ class OperatorHomeScreen extends StatelessWidget {
                     ),
                     subtitle: resolvedLastCollection.collectedAt ??
                         resolvedLastCollection.lastPickupAt,
-                    trailing: CircleAvatar(
-                      backgroundColor: AppColors.primary.withOpacity(0.12),
-                       child: const Icon(Icons.check_rounded,
-                           color: AppColors.primary),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(width: 6),
+                        CircleAvatar(
+                          radius: 10,
+                          backgroundColor: AppColors.primary.withOpacity(0.12),
+                          child: const Icon(Icons.check_rounded,
+                              color: AppColors.primary, size: 14),
+                        ),
+                      ],
                     ),
                     child: Row(
                       children: [
@@ -348,8 +351,7 @@ class _AttendanceSection extends StatelessWidget {
                     IconButton(
                       tooltip: "History",
                       onPressed: onHistoryTap ?? onTap,
-                      icon:
-                          const Icon(Icons.history, color: AppColors.primary),
+                      icon: const Icon(Icons.history, color: AppColors.primary),
                     ),
                     ElevatedButton.icon(
                       onPressed: onTap,

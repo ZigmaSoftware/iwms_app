@@ -125,11 +125,6 @@ class OperatorHeader extends StatelessWidget {
             onPressed: onMenuTap,
             icon: const Icon(Icons.more_horiz_rounded, color: Colors.white),
           ),
-        IconButton(
-          tooltip: 'Logout',
-          onPressed: onLogout,
-          icon: const Icon(Icons.logout_rounded, color: Colors.white),
-        ),
       ],
     );
   }

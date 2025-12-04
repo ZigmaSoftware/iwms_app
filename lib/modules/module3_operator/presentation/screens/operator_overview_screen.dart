@@ -11,8 +11,15 @@ const Color _wetTint = Color(0xFF2196F3);
 const Color _dryTint = Color(0xFFFF9800);
 const Color _mixedTint = Color(0xFFE53935);
 
-class OperatorOverviewScreen extends StatelessWidget {
+class OperatorOverviewScreen extends StatefulWidget {
   const OperatorOverviewScreen({super.key});
+
+  @override
+  State<OperatorOverviewScreen> createState() => _OperatorOverviewScreenState();
+}
+
+class _OperatorOverviewScreenState extends State<OperatorOverviewScreen> {
+  DateTime _selectedDate = DateTime.now();
 
   @override
   Widget build(BuildContext context) {
@@ -21,16 +28,16 @@ class OperatorOverviewScreen extends StatelessWidget {
     return ValueListenableBuilder<List<CollectionHistoryEntry>>(
       valueListenable: historyService.entriesNotifier,
       builder: (context, entries, _) {
-        final today = entries
-            .where((e) => _isSameDay(e.collectedAt, DateTime.now()))
+        final filtered = entries
+            .where((e) => _isSameDay(e.collectedAt, _selectedDate))
             .toList()
           ..sort((a, b) => b.collectedAt.compareTo(a.collectedAt));
 
-        if (today.isEmpty) {
+        if (filtered.isEmpty) {
           return _buildEmptyState(context);
         }
 
-        final mapped = _mapTodayEntries(today);
+        final mapped = _mapTodayEntries(filtered);
         final summary = _calculateTotals(mapped);
 
         return Column(
@@ -44,6 +51,16 @@ class OperatorOverviewScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        tooltip: "Pick date",
+                        icon: const Icon(Icons.calendar_today_rounded,
+                            color: AppColors.primary),
+                        onPressed: _pickDate,
+                      ),
+                    ),
+
                     // ------------------ SUMMARY METRICS ------------------
                     _buildSummaryMetrics(summary),
 
@@ -77,6 +94,19 @@ class OperatorOverviewScreen extends StatelessWidget {
   // -------------------------------------------------------
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: now.subtract(const Duration(days: 365)),
+      lastDate: now,
+    );
+    if (picked != null && mounted) {
+      setState(() => _selectedDate = picked);
+    }
+  }
 
   List<_OverviewEntry> _mapTodayEntries(List<CollectionHistoryEntry> entries) {
     final f = DateFormat('hh:mm a');
