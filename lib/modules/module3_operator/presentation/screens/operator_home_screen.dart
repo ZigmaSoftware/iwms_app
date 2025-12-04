@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_dashboard_models.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_cards.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_header.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_qr_button.dart';
-import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
+
+const EdgeInsets _pagePadding =
+    EdgeInsets.symmetric(horizontal: 20, vertical: 16);
 
 class OperatorHomeScreen extends StatelessWidget {
   const OperatorHomeScreen({
@@ -17,6 +20,8 @@ class OperatorHomeScreen extends StatelessWidget {
     required this.onLogout,
     this.onOpenAttendance,
     this.onOpenProfile,
+    this.onOpenHistory,
+    this.onOpenAttendanceSummary,
     this.nextStop,
     this.lastCollection,
     this.attendanceSummary,
@@ -30,6 +35,8 @@ class OperatorHomeScreen extends StatelessWidget {
   final VoidCallback onLogout;
   final VoidCallback? onOpenAttendance;
   final VoidCallback? onOpenProfile;
+  final VoidCallback? onOpenHistory;
+  final VoidCallback? onOpenAttendanceSummary;
   final OperatorNextStop? nextStop;
   final OperatorCollectionSummary? lastCollection;
   final OperatorAttendanceSummary? attendanceSummary;
@@ -42,8 +49,17 @@ class OperatorHomeScreen extends StatelessWidget {
     final resolvedAttendance =
         attendanceSummary ?? const OperatorAttendanceSummary();
 
+    final nextSubtitle = resolvedNextStop.locationName.isNotEmpty
+        ? resolvedNextStop.locationName
+        : (resolvedNextStop.label ?? '');
+    final nextStatus = resolvedNextStop.status ?? 'Scheduled';
+    final nextEta = resolvedNextStop.scheduledTime.isNotEmpty
+        ? resolvedNextStop.scheduledTime
+        : (resolvedNextStop.timeRemaining ?? '--');
+    final nextRoute = resolvedNextStop.routeName ?? 'Route not assigned';
+
     return ColoredBox(
-      color: OperatorTheme.background,
+      color: AppColors.background,
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         child: Column(
@@ -59,37 +75,36 @@ class OperatorHomeScreen extends StatelessWidget {
               subtitle: '$operatorName · $operatorCode',
             ),
             Padding(
-              padding: OperatorTheme.pagePadding,
+              padding: _pagePadding,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   OperatorInfoCard(
                     title: "Next stop",
-                    subtitle: resolvedNextStop.label,
+                    titleStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    subtitle: nextSubtitle.isNotEmpty
+                        ? nextSubtitle
+                        : "Upcoming stop",
                     trailing: Chip(
                       label: Text(
-                        resolvedNextStop.status,
+                        nextStatus,
                         style: const TextStyle(
-                          color: OperatorTheme.primary,
+                          color: AppColors.primary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      backgroundColor: OperatorTheme.primary.withOpacity(0.1),
+                      backgroundColor: AppColors.primary.withOpacity(0.1),
                       shape: const StadiumBorder(),
                     ),
                     child: Row(
                       children: [
                         _InfoRowItem(
-                          icon: Icons.timer_outlined,
-                          title: "ETA",
-                          value: resolvedNextStop.timeRemaining,
-                          expand: false,
-                        ),
-                        const SizedBox(width: 16),
-                        _InfoRowItem(
                           icon: Icons.location_pin,
                           title: "Route",
-                          value: resolvedNextStop.routeName,
+                          value: nextRoute,
                         ),
                       ],
                     ),
@@ -105,18 +120,30 @@ class OperatorHomeScreen extends StatelessWidget {
                       "Tap to scan QR / Collect waste",
                       style: AppTextStyles.bodyMedium.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: OperatorTheme.mutedText,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   OperatorInfoCard(
                     title: "Last collected",
-                    subtitle: resolvedLastCollection.collectedAt,
-                    trailing: CircleAvatar(
-                      backgroundColor: OperatorTheme.primary.withOpacity(0.12),
-                      child: const Icon(Icons.check_rounded,
-                          color: OperatorTheme.primary),
+                    titleStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    subtitle: resolvedLastCollection.collectedAt ??
+                        resolvedLastCollection.lastPickupAt,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(width: 6),
+                        CircleAvatar(
+                          radius: 10,
+                          backgroundColor: AppColors.primary.withOpacity(0.12),
+                          child: const Icon(Icons.check_rounded,
+                              color: AppColors.primary, size: 14),
+                        ),
+                      ],
                     ),
                     child: Row(
                       children: [
@@ -124,7 +151,7 @@ class OperatorHomeScreen extends StatelessWidget {
                           icon: Icons.recycling_rounded,
                           title: "Wet",
                           value:
-                              '${resolvedLastCollection.wetKg.toStringAsFixed(1)} kg',
+                              '${(resolvedLastCollection.wetKg ?? resolvedLastCollection.totalWetKg).toStringAsFixed(1)} kg',
                         ),
                         Container(
                           width: 1,
@@ -135,7 +162,7 @@ class OperatorHomeScreen extends StatelessWidget {
                           icon: Icons.layers_rounded,
                           title: "Dry",
                           value:
-                              '${resolvedLastCollection.dryKg.toStringAsFixed(1)} kg',
+                              '${(resolvedLastCollection.dryKg ?? resolvedLastCollection.totalDryKg).toStringAsFixed(1)} kg',
                         ),
                         Container(
                           width: 1,
@@ -145,7 +172,8 @@ class OperatorHomeScreen extends StatelessWidget {
                         _InfoRowItem(
                           icon: Icons.access_time,
                           title: "Time",
-                          value: resolvedLastCollection.timeTaken,
+                          value: resolvedLastCollection.timeTaken ??
+                              resolvedLastCollection.lastPickupAt,
                         ),
                       ],
                     ),
@@ -154,6 +182,8 @@ class OperatorHomeScreen extends StatelessWidget {
                   _AttendanceSection(
                     summary: resolvedAttendance,
                     onTap: onOpenAttendance,
+                    onHistoryTap: onOpenHistory,
+                    onSummaryTap: onOpenAttendanceSummary,
                   ),
                 ],
               ),
@@ -184,7 +214,7 @@ class _InfoRowItem extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: OperatorTheme.primary),
+        Icon(icon, color: AppColors.primary),
         const SizedBox(width: 8),
         Flexible(
           child: Column(
@@ -193,7 +223,7 @@ class _InfoRowItem extends StatelessWidget {
               Text(
                 title,
                 style: AppTextStyles.bodyMedium.copyWith(
-                  color: OperatorTheme.mutedText,
+                  color: AppColors.textSecondary,
                   fontSize: 11,
                 ),
               ),
@@ -203,7 +233,7 @@ class _InfoRowItem extends StatelessWidget {
                 style: AppTextStyles.bodyMedium.copyWith(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: OperatorTheme.strongText,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
@@ -223,10 +253,14 @@ class _AttendanceSection extends StatelessWidget {
   const _AttendanceSection({
     required this.summary,
     this.onTap,
+    this.onHistoryTap,
+    this.onSummaryTap,
   });
 
   final OperatorAttendanceSummary summary;
   final VoidCallback? onTap;
+  final VoidCallback? onHistoryTap;
+  final VoidCallback? onSummaryTap;
 
   @override
   Widget build(BuildContext context) {
@@ -239,7 +273,7 @@ class _AttendanceSection extends StatelessWidget {
         onPressed: onTap,
         icon: const Icon(
           Icons.open_in_new_rounded,
-          color: OperatorTheme.primary,
+          color: AppColors.primary,
         ),
       ),
       child: Column(
@@ -259,7 +293,7 @@ class _AttendanceSection extends StatelessWidget {
               Expanded(
                 child: OperatorQuickStat(
                   label: "This month",
-                  value: summary.monthStat,
+                  value: summary.monthStat ?? "--",
                   icon: Icons.calendar_month_outlined,
                 ),
               ),
@@ -267,7 +301,7 @@ class _AttendanceSection extends StatelessWidget {
               Expanded(
                 child: OperatorQuickStat(
                   label: "Leave balance",
-                  value: summary.leaveBalance,
+                  value: summary.leaveBalance ?? "--",
                   icon: Icons.local_florist_outlined,
                 ),
               ),
@@ -277,7 +311,7 @@ class _AttendanceSection extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: OperatorTheme.primary.withOpacity(0.09),
+              color: AppColors.primary.withOpacity(0.09),
               borderRadius: BorderRadius.circular(18),
             ),
             child: Row(
@@ -287,42 +321,62 @@ class _AttendanceSection extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        summary.streakLabel,
+                        summary.streakLabel ?? "Attendance streak",
                         style: AppTextStyles.bodyMedium.copyWith(
-                          color: OperatorTheme.mutedText,
+                          color: AppColors.textSecondary,
                           fontSize: 11,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        summary.streakValue,
+                        summary.streakValue ?? "--",
                         style: AppTextStyles.heading2.copyWith(
-                          color: OperatorTheme.primary,
+                          color: AppColors.primary,
                         ),
                       ),
                     ],
                   ),
                 ),
-                ElevatedButton.icon(
-                  onPressed: onTap,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: OperatorTheme.primary,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 12,
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    IconButton(
+                      tooltip: "Summary",
+                      onPressed: onSummaryTap ?? onTap,
+                      icon:
+                          const Icon(Icons.summarize, color: AppColors.primary),
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
+                    IconButton(
+                      tooltip: "History",
+                      onPressed: onHistoryTap ?? onTap,
+                      icon: const Icon(Icons.history, color: AppColors.primary),
                     ),
-                  ),
-                  icon: const Icon(Icons.event_available, color: Colors.white),
-                  label: Text(
-                    "Mark Attendance",
-                    style: AppTextStyles.labelLarge.copyWith(
-                      color: Colors.white,
-                      fontSize: 12,
+                    ElevatedButton.icon(
+                      onPressed: onTap,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        minimumSize: const Size(0, 42),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                      ),
+                      icon: const Icon(Icons.event_available,
+                          color: Colors.white),
+                      label: Text(
+                        "Mark",
+                        style: AppTextStyles.labelLarge.copyWith(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),

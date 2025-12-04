@@ -101,7 +101,17 @@ class OfflineSyncService {
       await http.MultipartFile.fromPath("image", r.imagePath),
     );
 
-    final resp = await req.send();
+    http.StreamedResponse resp;
+    try {
+      resp = await req.send();
+    } on SocketException catch (_) {
+      return false;
+    } on HttpException catch (_) {
+      return false;
+    } on http.ClientException catch (_) {
+      return false;
+    }
+
     final body = await http.Response.fromStream(resp);
 
     try {
@@ -142,7 +152,17 @@ class OfflineSyncService {
       ..fields["entry_type"] = r.entryType
       ..fields["total_waste_collected"] = r.totalWeight.toString();
 
-    final resp = await req.send();
+    http.StreamedResponse resp;
+    try {
+      resp = await req.send();
+    } on SocketException catch (_) {
+      return false;
+    } on HttpException catch (_) {
+      return false;
+    } on http.ClientException catch (_) {
+      return false;
+    }
+
     final body = await http.Response.fromStream(resp);
 
     try {

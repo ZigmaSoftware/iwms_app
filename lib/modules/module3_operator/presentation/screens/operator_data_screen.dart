@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io';
+import 'package:go_router/go_router.dart';
+import 'package:iwms_citizen_app/core/theme/app_colors.dart';
 import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/offline/pending_finalize_dao.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/offline/pending_finalize_record.dart';
@@ -12,11 +14,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:iwms_citizen_app/router/app_router.dart';
 import 'package:iwms_citizen_app/router/route_observer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../offline/offline_sync_service.dart';
 import '../../offline/pending_record.dart';
 import '../../offline/pending_record_dao.dart';
+
+const BorderRadius _kOperatorCardRadius = BorderRadius.all(Radius.circular(18));
 
 class OperatorDataScreen extends StatefulWidget {
   final String customerId;
@@ -90,7 +95,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     _syncService = OfflineSyncService(
       recordDao: _pendingDao,
       finalizeDao: _finalizeDao,
-      baseUrl: 'http://192.168.4.75:8000/api/mobile/waste',
+      baseUrl: 'http://192.168.5.92:8000/api/mobile/waste',
     )..start();
 
     _fetchWasteTypes();
@@ -334,8 +339,8 @@ Future<void> _fetchWasteTypes() async {
       // ------------------------------------------------------------
       final uri = Uri.parse(
         isUpdate
-            ? 'http://192.168.4.75:8000/api/mobile/waste/update-waste-sub/'
-            : 'http://192.168.4.75:8000/api/mobile/waste/insert-waste-sub/',
+            ? 'http://192.168.5.92:8000/api/mobile/waste/update-waste-sub/'
+            : 'http://192.168.5.92:8000/api/mobile/waste/insert-waste-sub/',
       );
 
       debugPrint(
@@ -597,10 +602,10 @@ Future<void> _fetchWasteTypes() async {
 
   // ==================== UI HELPERS ====================
   Widget _buildCustomerInfo() => Card(
-        color: OperatorTheme.surface,
+        color: AppColors.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: OperatorTheme.cardRadius,
+          borderRadius: _kOperatorCardRadius,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -617,14 +622,14 @@ Future<void> _fetchWasteTypes() async {
           label,
           style: AppTextStyles.bodyMedium.copyWith(
             fontWeight: FontWeight.w600,
-            color: OperatorTheme.strongText,
+            color: AppColors.textPrimary,
           ),
         ),
         subtitle: Text(
           value,
           style: AppTextStyles.bodyMedium.copyWith(
             fontWeight: FontWeight.w500,
-            color: OperatorTheme.mutedText,
+            color: AppColors.textSecondary,
           ),
         ),
       );
@@ -641,9 +646,9 @@ Future<void> _fetchWasteTypes() async {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 10),
       shape: RoundedRectangleBorder(
-        borderRadius: OperatorTheme.cardRadius,
+        borderRadius: _kOperatorCardRadius,
         side: BorderSide(
-          color: (type == activeType) ? OperatorTheme.primary : Colors.black12,
+          color: (type == activeType) ? AppColors.primary : Colors.black12,
           width: (type == activeType) ? 1.5 : 1,
         ),
       ),
@@ -752,9 +757,22 @@ Future<void> _fetchWasteTypes() async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: OperatorTheme.background,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: OperatorTheme.primary,
+        backgroundColor: AppColors.primary,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            // Prefer router navigation back to operator home tabbar.
+            final navigator = Navigator.of(context);
+            if (navigator.canPop()) {
+              navigator.pop();
+            } else {
+              // Fallback to route if opened fresh.
+              context.go(AppRoutePaths.operatorHome);
+            }
+          },
+        ),
         title: Text(
           "Customer Details",
           style: AppTextStyles.heading2.copyWith(color: Colors.white),
@@ -766,7 +784,7 @@ Future<void> _fetchWasteTypes() async {
               children: [
                 Container(
                   width: double.infinity,
-                  color: OperatorTheme.accentLight,
+                  color: AppColors.accentLight,
                   padding:
                       const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                   child: Text(

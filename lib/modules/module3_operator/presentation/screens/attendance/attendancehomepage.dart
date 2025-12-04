@@ -136,6 +136,14 @@ class _HomePage1State extends State<HomePage1> {
 
             if (index == 0) {
               context.go("/operator-home");
+            } else if (index == 2) {
+              // Dedicated navigation to history/summary
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => AttendanceHistory(empId: widget.empid),
+                ),
+              );
+              setState(() => _activeTab = 2);
             } else {
               setState(() => _activeTab = index);
             }

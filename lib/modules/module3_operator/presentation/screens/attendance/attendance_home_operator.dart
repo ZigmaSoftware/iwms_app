@@ -10,17 +10,25 @@ import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart'; // Import geolocator package
 import 'package:http/http.dart' as http;
 import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
 // import 'package:zigma_payroll/attendance/userimage.dart';
 
 // import '../provider/username.dart';
 import 'camerapage.dart';
 
-const Color _operatorPrimary = OperatorTheme.primary;
-const Color _operatorAccent = OperatorTheme.primaryAccent;
+const Color _operatorPrimary = AppColors.primary;
+const Color _operatorAccent = AppColors.primaryVariant;
 
 class AttendancePage extends StatefulWidget {
-  const AttendancePage({super.key});
+  const AttendancePage({
+    super.key,
+    this.operatorName = '',
+    this.operatorCode = '',
+  });
+
+  final String operatorName;
+  final String operatorCode;
 
   @override
   State<AttendancePage> createState() => _AttendancePageState();
@@ -365,13 +373,15 @@ class _AttendancePageState extends State<AttendancePage> {
 
   @override
   Widget build(BuildContext context) {
-    final userName = "Operator 1";
-    final empid = "504";
+    final userName =
+        widget.operatorName.isNotEmpty ? widget.operatorName : "Operator";
+    final empid = widget.operatorCode;
 
     return SafeArea(
       child: Scaffold(
-        backgroundColor: Colors.grey.shade100,
+        backgroundColor: AppColors.background,
         body: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
           child: Column(
             children: [
               // ===========================
@@ -379,61 +389,38 @@ class _AttendancePageState extends State<AttendancePage> {
               // ===========================
               Container(
                 width: double.infinity,
-                padding: EdgeInsets.fromLTRB(20, 25, 20, 30),
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 26),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        _operatorPrimary,
-                        _operatorAccent
-                        // Color(0xFF007BFF),
-                        // Color(0xFF00AEEF),
-                      ]),
-                  borderRadius: BorderRadius.vertical(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      _operatorPrimary,
+                      _operatorAccent,
+                    ],
+                  ),
+                  borderRadius: const BorderRadius.vertical(
                     bottom: Radius.circular(35),
                   ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // PROFILE ROW
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 40,
-                          backgroundColor: Colors.white,
-                          backgroundImage: imageName != null
-                              ? NetworkImage(
-                                  'http://zigfly.in:5000/uploads/$imageName')
-                              : null,
-                          child: imageName == null
-                              ? Icon(Icons.person, size: 45, color: Colors.grey)
-                              : null,
-                        ),
-                        SizedBox(width: 15),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                userName,
-                                style: TextStyle(
-                                  fontSize: 22,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text(
-                                "EMP ID : $empid",
-                                style: TextStyle(
-                                    color: Colors.white70, fontSize: 14),
-                              ),
-                            ],
-                          ),
-                        ),
-                        _networkStatusChip(),
-                      ],
+                    Text(
+                      "Attendance",
+                      style: AppTextStyles.heading2.copyWith(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      "Manage today's presence and history",
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
@@ -516,10 +503,9 @@ class _AttendancePageState extends State<AttendancePage> {
                   children: [
                     Text(
                       DateFormat('dd MMMM yyyy').format(DateTime.now()),
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                      style: AppTextStyles.heading2.copyWith(fontSize: 16),
                     ),
-                    SizedBox(height: 15),
+                    const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -551,7 +537,20 @@ class _AttendancePageState extends State<AttendancePage> {
                   _quickAction(Icons.logout, "Leave"),
                   _quickAction(Icons.place, "Visit"),
                   _quickAction(Icons.timer, "Overtime"),
-                  _quickAction(Icons.history, "History"),
+                  _quickAction(Icons.history, "History", onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => AttendanceHistory(empId: empid),
+                      ),
+                    );
+                  }),
+                  _quickAction(Icons.summarize_rounded, "Summary", onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => AttendanceHistory(empId: empid),
+                      ),
+                    );
+                  }),
                 ],
               ),
 
@@ -800,28 +799,34 @@ class _AttendancePageState extends State<AttendancePage> {
   }
 
   /// QUICK ACTION ICON
-  Widget _quickAction(IconData icon, String title) {
-    return Column(
-      children: [
-        Container(
-          height: 55,
-          width: 55,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                blurRadius: 8,
-                color: Colors.black12,
-              )
-            ],
+  Widget _quickAction(IconData icon, String title, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Column(
+        children: [
+          Container(
+            height: 52,
+            width: 52,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  blurRadius: 8,
+                  color: Colors.black12,
+                )
+              ],
+            ),
+            child: Icon(icon, size: 24, color: Color(0xFF1B5E20)),
           ),
-          child: Icon(icon, size: 28, color: Color(0xFF1B5E20)),
-        ),
-        SizedBox(height: 6),
-        Text(title,
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-      ],
+          SizedBox(height: 6),
+          Text(
+            title,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
     );
   }
 
@@ -840,7 +845,7 @@ class _AttendancePageState extends State<AttendancePage> {
         Text(
           value,
           style: TextStyle(
-            fontSize: 18,
+            fontSize: 16,
             fontWeight: FontWeight.w700,
             color: Colors.black87,
           ),
@@ -849,7 +854,7 @@ class _AttendancePageState extends State<AttendancePage> {
         Text(
           title,
           style: TextStyle(
-            fontSize: 13,
+            fontSize: 12,
             color: Colors.black54,
             fontWeight: FontWeight.w500,
           ),
