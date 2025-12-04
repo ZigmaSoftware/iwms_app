@@ -277,7 +277,7 @@ class AppRouter {
           return isPublic ? AppRoutePaths.citizenHome : null;
 
         case "operator":
-        return isPublic ? AppRoutePaths.operatorData : null;
+        return isPublic ? AppRoutePaths.operatorLogin : null;
 
 
         case "driver":
