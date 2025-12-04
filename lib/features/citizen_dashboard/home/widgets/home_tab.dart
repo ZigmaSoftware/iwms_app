@@ -28,6 +28,7 @@ class HomeTab extends StatelessWidget {
     required this.textColor,
     required this.secondaryTextColor,
     required this.highlightColor,
+    required this.onStatsTap,
   });
 
   final BannerController bannerController;
@@ -42,27 +43,7 @@ class HomeTab extends StatelessWidget {
   final Color textColor;
   final Color secondaryTextColor;
   final Color highlightColor;
-
-  List<RadialBarData> get _collectionProgressItems => const [
-        RadialBarData(
-          label: 'Wet',
-          value: 40,
-          valueLabel: 'Wet 40%',
-          color: Color(0xFF1976D2),
-        ),
-        RadialBarData(
-          label: 'Dry',
-          value: 32,
-          valueLabel: 'Dry 32%',
-          color: Color(0xFF2E7D32),
-        ),
-        RadialBarData(
-          label: 'Mixed',
-          value: 28,
-          valueLabel: 'Mixed 28%',
-          color: Color(0xFFF57F17),
-        ),
-      ];
+  final VoidCallback onStatsTap;
 
   @override
   Widget build(BuildContext context) {
@@ -70,10 +51,6 @@ class HomeTab extends StatelessWidget {
     final responsive = MediaQuery.of(context).size;
     final double headerHeight = (responsive.height * 0.32).clamp(260, 360);
     final double bannerHeight = (headerHeight * 0.55).clamp(140, 190);
-
-    final WasteSummary? activeSummary = trackController.currentSummary;
-    final stats =
-        _Stats.fallback(trackController, activeSummary, _collectionProgressItems);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -106,21 +83,31 @@ class HomeTab extends StatelessWidget {
           },
         ),
         const SizedBox(height: DashboardThemeTokens.spacing12),
-        Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: DashboardThemeTokens.spacing16,
-          ),
-          child: SectionCard(
-            surfaceColor: surfaceColor,
-            outlineColor: outlineColor,
-            isDarkMode: isDarkMode,
-            child: _CollectionStatsCard(
-              stats: stats,
-              highlightColor: highlightColor,
-              textColor: textColor,
-              secondaryTextColor: secondaryTextColor,
-            ),
-          ),
+        AnimatedBuilder(
+          animation: trackController,
+          builder: (context, _) {
+            final stats =
+                _Stats.fromSummary(trackController, trackController.currentSummary);
+            return Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: DashboardThemeTokens.spacing16,
+              ),
+              child: GestureDetector(
+                onTap: onStatsTap,
+                child: SectionCard(
+                  surfaceColor: surfaceColor,
+                  outlineColor: outlineColor,
+                  isDarkMode: isDarkMode,
+                  child: _CollectionStatsCard(
+                    stats: stats,
+                    highlightColor: highlightColor,
+                    textColor: textColor,
+                    secondaryTextColor: secondaryTextColor,
+                  ),
+                ),
+              ),
+            );
+          },
         ),
         const SizedBox(height: DashboardThemeTokens.spacing16),
         Expanded(
@@ -260,51 +247,44 @@ class _Stats {
   final double primaryValue;
   final String primaryLabel;
   final List<RadialBarData> progressItems;
-  final WasteSummary? summary;
+  final WasteSummary summary;
 
-  factory _Stats.fallback(
+  factory _Stats.fromSummary(
     TrackController controller,
     WasteSummary? summary,
-    List<RadialBarData> fallback,
   ) {
     final weightFormatter = controller.weightFormatter;
-    if (summary != null) {
-      final dry = summary.dryWeight;
-      final wet = summary.wetWeight;
-      final mixed = summary.mixWeight;
-      return _Stats(
-        primaryValue: summary.totalNetWeight,
-        primaryLabel: 'Total waste collected',
-        summary: summary,
-        progressItems: [
-          RadialBarData(
-            label: 'Wet',
-            value: wet,
-            valueLabel: 'Wet ${weightFormatter.format(summary.wetWeight)} kg',
-            color: const Color(0xFF1976D2),
-          ),
-          RadialBarData(
-            label: 'Dry',
-            value: dry,
-            valueLabel: 'Dry ${weightFormatter.format(summary.dryWeight)} kg',
-            color: const Color(0xFF2E7D32),
-          ),
-          RadialBarData(
-            label: 'Mixed',
-            value: mixed,
-            valueLabel:
-                'Mixed ${weightFormatter.format(summary.mixWeight)} kg',
-            color: const Color(0xFFF57F17),
-          ),
-        ],
-      )..primaryValue;
-    }
+    final data = summary ?? WasteSummary.zero(controller.selectedDate);
+    final hasData = data.totalNetWeight > 0;
+    final String primaryLabel = hasData
+        ? '${controller.periodLabel(controller.selectedPeriod)} waste collected'
+        : 'No waste recorded yet for this period';
 
     return _Stats(
-      primaryValue: 100,
-      primaryLabel: 'Average waste saving this month',
-      progressItems: fallback,
-      summary: null,
+      primaryValue: data.totalNetWeight,
+      primaryLabel: primaryLabel,
+      summary: data,
+      progressItems: [
+        RadialBarData(
+          label: 'Wet',
+          value: data.wetWeight,
+          valueLabel: 'Wet ${weightFormatter.format(data.wetWeight)} kg',
+          color: const Color(0xFF1976D2),
+        ),
+        RadialBarData(
+          label: 'Dry',
+          value: data.dryWeight,
+          valueLabel: 'Dry ${weightFormatter.format(data.dryWeight)} kg',
+          color: const Color(0xFF2E7D32),
+        ),
+        RadialBarData(
+          label: 'Mixed',
+          value: data.mixWeight,
+          valueLabel:
+              'Mixed ${weightFormatter.format(data.mixWeight)} kg',
+          color: const Color(0xFFF57F17),
+        ),
+      ],
     );
   }
 }
@@ -327,9 +307,9 @@ class _CollectionStatsCard extends StatelessWidget {
     final theme = Theme.of(context);
     final summary = stats.summary;
     final weightFormatter = NumberFormat.decimalPattern();
-    final double dryValue = summary?.dryWeight ?? 40;
-    final double wetValue = summary?.wetWeight ?? 32;
-    final double mixedValue = summary?.mixWeight ?? 28;
+    final double dryValue = summary.dryWeight;
+    final double wetValue = summary.wetWeight;
+    final double mixedValue = summary.mixWeight;
     final double computedTotal = dryValue + wetValue + mixedValue;
 
     Widget buildSwatch(RadialBarData item) {
@@ -383,7 +363,7 @@ class _CollectionStatsCard extends StatelessWidget {
               const SizedBox(height: DashboardThemeTokens.spacing6),
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: theme.colorScheme.surface,
                   borderRadius:
                       BorderRadius.circular(DashboardThemeTokens.radiusLarge),
                 ),
@@ -408,9 +388,9 @@ class _CollectionStatsCard extends StatelessWidget {
           height: 120,
           child: WasteRadialBreakdown(
             items: stats.progressItems,
-            totalValue: summary != null ? computedTotal : 100,
+            totalValue: computedTotal,
             textColor: textColor,
-            backgroundColor: Colors.white,
+            backgroundColor: theme.colorScheme.surface,
           ),
         ),
       ],

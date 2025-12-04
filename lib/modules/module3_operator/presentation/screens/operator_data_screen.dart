@@ -511,6 +511,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     setState(() => _isSubmitting = true);
 
     final totalWeight = _calculateTotalWeight();
+    final summary = _buildSummarySnapshot();
 
     try {
       debugPrint('🔎 total waste before submit: $totalWeight');
@@ -536,9 +537,9 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
       if (result['status'] == 'success') {
         await _recordCollectionHistory(totalWeight);
+        await _showSuccessSheet(totalWeight, summary);
         _resetUI();
         await _fetchWasteTypes();
-        _showDialog("Success", "Record submitted successfully");
       } else {
         throw Exception(result['message']);
       }
@@ -565,13 +566,9 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
       // Reset UI like online mode
       await _recordCollectionHistory(totalWeight);
+      await _showSuccessSheet(totalWeight, summary, offline: true);
       _resetUI();
       await _fetchWasteTypes();
-
-      _showDialog(
-        "Offline Mode",
-        "Finalize request saved offline. Will sync automatically when you reconnect.",
-      );
     } finally {
       setState(() => _isSubmitting = false);
     }
@@ -620,6 +617,128 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     final source = entry['finalWeight'] ?? entry['weight'];
     if (source == null) return 0;
     return double.tryParse(source.toString()) ?? 0;
+  }
+
+  Map<String, double> _buildSummarySnapshot() {
+    final Map<String, double> totals = {'wet': 0, 'dry': 0, 'mixed': 0};
+    _wasteData.forEach((key, value) {
+      final weight = _weightFromEntry(value);
+      if (weight <= 0) return;
+      if (key.contains('wet')) {
+        totals['wet'] = (totals['wet'] ?? 0) + weight;
+      } else if (key.contains('dry')) {
+        totals['dry'] = (totals['dry'] ?? 0) + weight;
+      } else {
+        totals['mixed'] = (totals['mixed'] ?? 0) + weight;
+      }
+    });
+    return totals;
+  }
+
+  Future<void> _showSuccessSheet(
+    double totalWeight,
+    Map<String, double> summary, {
+    bool offline = false,
+  }) async {
+    if (!mounted) return;
+    final theme = Theme.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      isDismissible: true,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    offline ? Icons.cloud_off : Icons.check_circle,
+                    color: offline ? Colors.orange : Colors.green,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    offline ? 'Saved offline' : 'Collection recorded',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Total: ${totalWeight.toStringAsFixed(2)} kg',
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                children: [
+                  _pill('Wet', summary['wet'] ?? 0, Colors.blue),
+                  _pill('Dry', summary['dry'] ?? 0, Colors.green),
+                  _pill('Mixed', summary['mixed'] ?? 0, Colors.orange),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green.shade700,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onPressed: () {
+                        Navigator.of(sheetContext).pop();
+                        context.go(AppRoutePaths.operatorHome);
+                      },
+                      icon: const Icon(Icons.home),
+                      label: const Text('Back to home'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onPressed: () {
+                        Navigator.of(sheetContext).pop();
+                      },
+                      child: const Text('Close'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _pill(String label, double value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Text(
+        '$label ${value.toStringAsFixed(2)} kg',
+        style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+    );
   }
 
   // ==================== DIALOG ====================

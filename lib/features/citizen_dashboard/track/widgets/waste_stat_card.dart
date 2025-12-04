@@ -29,6 +29,9 @@ class WasteStatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final surface = theme.colorScheme.surface;
+    final onSurface = theme.colorScheme.onSurface;
+    final onSurfaceMuted = theme.colorScheme.onSurfaceVariant;
+    final bool isDark = theme.brightness == Brightness.dark;
     final borderRadius = BorderRadius.circular(DashboardThemeTokens.radiusXL);
     final screenHeight = MediaQuery.sizeOf(context).height;
     final double cardHeight = math.min(screenHeight * 0.22, 200);
@@ -43,7 +46,7 @@ class WasteStatCard extends StatelessWidget {
           border: Border.all(
             color: isSelected
                 ? accentColor.withValues(alpha: 0.6)
-                : Colors.black.withValues(alpha: 0.08),
+                : onSurface.withValues(alpha: isDark ? 0.2 : 0.1),
             width: isSelected ? 2 : 1,
           ),
           boxShadow: const [
@@ -94,7 +97,7 @@ class WasteStatCard extends StatelessWidget {
                         Text(
                           label,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.black87,
+                            color: onSurfaceMuted,
                             fontWeight: FontWeight.w700,
                             fontSize: 11,
                           ),
@@ -119,7 +122,7 @@ class WasteStatCard extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.titleMedium?.copyWith(
-                                color: Colors.black,
+                                color: onSurface,
                                 fontWeight: FontWeight.w800,
                                 fontSize: 15,
                               ),

@@ -251,7 +251,7 @@ class _SummaryPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(14),
@@ -265,6 +265,7 @@ class _SummaryPill extends StatelessWidget {
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w800,
                   color: color,
+                  fontSize: 14,
                 ),
           ),
           const SizedBox(height: 4),
@@ -272,7 +273,8 @@ class _SummaryPill extends StatelessWidget {
             label,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Colors.black.withOpacity(0.65),
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
                 ),
           ),
         ],

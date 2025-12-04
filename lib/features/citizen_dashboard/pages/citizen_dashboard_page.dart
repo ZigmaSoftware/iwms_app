@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -23,9 +24,12 @@ import 'package:iwms_citizen_app/features/citizen_dashboard/notifications/models
 import 'package:iwms_citizen_app/features/citizen_dashboard/profile/widgets/profile_tab.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/quick_actions/models/quick_action.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/track/controllers/track_controller.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/track/models/waste_period.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/track/services/track_service.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/track/widgets/track_tab.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/geofence/utils/geofence_evaluator.dart';
+import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class CitizenDashboardPage extends StatefulWidget {
   const CitizenDashboardPage({super.key, required this.userName});
@@ -46,7 +50,9 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
   late final NotificationController _notificationController;
   late final HomeNavController _navController;
   late final GeofenceEvaluator _geofenceEvaluator;
+  late final AuthRepository _authRepository;
   DateTime? _lastGeofenceAlertAt;
+  String? _userId;
 
   late final List<BannerSlide> _fallbackSlides;
 
@@ -64,9 +70,19 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
     );
     _navController = HomeNavController();
     _geofenceEvaluator = const GeofenceEvaluator();
+    _authRepository = getIt<AuthRepository>();
 
     unawaited(_bannerController.initialize());
     unawaited(_trackController.refresh(force: true));
+    _loadUserId();
+  }
+
+  Future<void> _loadUserId() async {
+    final user = await _authRepository.getAuthenticatedUser();
+    if (!mounted) return;
+    setState(() {
+      _userId = user?.userId;
+    });
   }
 
   @override
@@ -155,6 +171,11 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
             textColor: textColor,
             secondaryTextColor: secondaryTextColor,
             highlightColor: highlightColor,
+            onStatsTap: () {
+              _trackController.setPeriod(WastePeriod.monthly);
+              _navController.setItem(BottomNavItem.track);
+              unawaited(_trackController.refresh(force: true));
+            },
           );
       }
     }
@@ -285,6 +306,11 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
 
   Future<void> _showQrDialog(BuildContext context) async {
     final theme = Theme.of(context);
+    final uid = _userId;
+    final qrPayload = uid != null
+        ? jsonEncode({"type": "citizen", "uid": uid})
+        : null;
+
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
@@ -311,15 +337,43 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 18),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: Image.asset(
-                    'assets/images/qr.png',
-                    width: 240,
-                    height: 240,
-                    fit: BoxFit.cover,
+                if (qrPayload != null)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color.fromRGBO(0, 0, 0, 0.08),
+                          blurRadius: 18,
+                          offset: Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: QrImageView(
+                      data: qrPayload,
+                      version: QrVersions.auto,
+                      size: 240,
+                      backgroundColor: Colors.white,
+                      eyeStyle: const QrEyeStyle(
+                        color: Colors.black,
+                        eyeShape: QrEyeShape.square,
+                      ),
+                      dataModuleStyle: const QrDataModuleStyle(
+                        color: Colors.black87,
+                        dataModuleShape: QrDataModuleShape.square,
+                      ),
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 28.0),
+                    child: Text(
+                      'Please log in to view your QR code.',
+                      style: theme.textTheme.bodyMedium,
+                    ),
                   ),
-                ),
                 const SizedBox(height: 20),
                 FilledButton.icon(
                   onPressed: () => Navigator.of(dialogContext).pop(),

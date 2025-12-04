@@ -25,13 +25,14 @@ Dio createDioClient() {
 class ApiConfig {
   static const String _legacyBase = 'https://zigma.in/iwms_app/iwms_app/';
   //static const String _localMobileBase = 'http://192.168.4.75:8000/api/mobile/';
-  static const String _localMobileBase = 'http://192.168.5.92:8000/api/mobile/';      
+  static const String _localMobileBase = 'http://192.168.5.92:8000/api/mobile/';
   // static const String _localMobileBase = 'http://10.111.127.123:8000/api/mobile/';
   //static const String _localMobileBase = 'http://10.153.105.158:8000/api/mobile/';
 
-  
-
-
+  /// Base URL used by the Flutter apps for mobile endpoints.
+  static const String mobileBase = _localMobileBase;
+  static const String wasteSummaryEndpoint =
+      '${mobileBase}waste/citizen-summary/';
 
   static const String driverLogin = '${_legacyBase}login.php';
   static const String citizenRegister = '${_legacyBase}citizen_register.php';
