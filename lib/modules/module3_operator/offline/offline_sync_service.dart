@@ -75,7 +75,7 @@ class OfflineSyncService {
   // -------------------------------------------------------------
   Future<bool> _syncSubRecord(PendingRecord r) async {
     final isUpdate = r.isUpdate == true;
-    final hasBackendUID = r.uniqueId != null && r.uniqueId!.startsWith("wcs");
+    final hasBackendUID = r.uniqueId.startsWith("wcs");
 
     // If backend UID exists → always UPDATE
     final endpoint =
@@ -94,7 +94,7 @@ class OfflineSyncService {
 
     // *********** For UPDATE ONLY ***********
     if (hasBackendUID) {
-      req.fields["unique_id"] = r.uniqueId!;
+      req.fields["unique_id"] = r.uniqueId;
     }
 
     req.files.add(

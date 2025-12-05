@@ -1,10 +1,11 @@
-import 'package:animations/animations.dart';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:motion_tab_bar/MotionTabBar.dart';
+import 'package:http/http.dart' as http;
 
 import '../../../../core/di.dart';
 import '../../../../core/geofence_config.dart';
@@ -12,10 +13,11 @@ import 'package:iwms_citizen_app/data/models/vehicle_model.dart';
 import '../../../../logic/vehicle_tracking/vehicle_bloc.dart';
 import '../../../../logic/vehicle_tracking/vehicle_event.dart';
 import '../../../../router/app_router.dart';
-import 'package:iwms_citizen_app/shared/widgets/tracking_view_shell.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
+import 'package:iwms_citizen_app/core/api_config.dart';
+import 'package:iwms_citizen_app/shared/widgets/tracking_view_shell.dart';
+import '../../route/driver_route_screen.dart';
 
 const Color _driverPrimary = Color(0xFF1B5E20);
 const Color _driverAccent = Color(0xFF66BB6A);
@@ -172,15 +174,16 @@ class DriverHomePage extends StatefulWidget {
 class _DriverHomePageState extends State<DriverHomePage> {
   _DriverTab _activeTab = _DriverTab.home;
   final MapController _mapController = MapController();
-
-  final List<LatLng> _routePoints =
-      _demoStops.map((stop) => stop.location).toList();
+  List<_DriverCustomerStop> _customers = [];
+  bool _loadingCustomers = true;
+  String? _customerError;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback(
         (_) => _centerOnDriver(GammaGeofenceConfig.center));
+    _loadCustomers();
   }
 
   VehicleModel? _selectedVehicleFrom(VehicleState state) {
@@ -224,100 +227,159 @@ class _DriverHomePageState extends State<DriverHomePage> {
             final driverLocation = _resolveDriverLocation(selectedVehicle);
             final origin = driverLocation;
             return Scaffold(
-              backgroundColor: const Color(0xFFF0F6F1),
+              backgroundColor: const Color(0xFFF7FBF8),
               body: SafeArea(
-                child: Stack(
-                  fit: StackFit.expand,
-                  clipBehavior: Clip.none,
+                child: Column(
                   children: [
-                    Column(
-                      children: [
-                        _DriverHeader(
-                          key: ValueKey<_DriverTab>(_activeTab),
-                          title: _headerTitle(_activeTab),
-                          subtitle: _headerSubtitle(_activeTab),
-                          activeTab: _activeTab,
-                          routeStops: _routePoints.length,
-                          onLogoutTapped: () => _logout(context),
-                          speed: selectedVehicle?.speedKmh,
-                          fuel: selectedVehicle?.fuelLevel,
-                          distance: selectedVehicle?.distanceKm,
-                        ),
-                        Expanded(
-                          child: PageTransitionSwitcher(
-                            duration: const Duration(milliseconds: 320),
-                            transitionBuilder: (
-                              child,
-                              animation,
-                              secondaryAnimation,
-                            ) {
-                              return SharedAxisTransition(
-                                animation: animation,
-                                secondaryAnimation: secondaryAnimation,
-                                transitionType:
-                                    SharedAxisTransitionType.horizontal,
-                                child: child,
-                              );
-                            },
-                            child: KeyedSubtree(
-                              key: ValueKey<_DriverTab>(_activeTab),
-                              child: _buildTab(_activeTab, driverLocation),
-                            ),
-                          ),
-                        ),
-                      ],
+                    _MiniHeader(
+                      driverName: selectedVehicle?.registrationNumber ??
+                          'Driver',
+                      onNotification: () {},
                     ),
-                    _StartButtonOverlay(
-                      visible: _activeTab == _DriverTab.home,
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => _FullMapPage(
-                              origin: origin,
-                              routePoints: _routePoints,
-                              stops: _demoStops,
-                              vehicle: selectedVehicle,
-                            ),
-                          ),
-                        );
-                      },
+                    Expanded(
+                      child: KeyedSubtree(
+                        key: ValueKey<_DriverTab>(_activeTab),
+                        child: _buildTab(_activeTab, driverLocation),
+                      ),
                     ),
                   ],
                 ),
               ),
               bottomNavigationBar: SafeArea(
-                child: MotionTabBar(
-                  labels: const ['Home', 'History', 'Profile'],
-                  icons: const [
-                    Icons.home_rounded,
-                    Icons.history_rounded,
-                    Icons.person_outline_rounded,
-                  ],
-                  initialSelectedTab: _tabLabel(_activeTab),
-                  tabBarColor: Colors.white,
-                  tabSelectedColor: _driverPrimary,
-                  tabIconColor: Colors.black54,
-                  tabBarHeight: 66,
-                  tabSize: 52,
-                  tabIconSize: 24,
-                  tabIconSelectedSize: 24,
-                  onTabItemSelected: (value) {
-                    final tab = value is String
-                        ? _tabFromLabel(value)
-                        : value is int
-                            ? _tabFromIndex(value)
-                            : null;
-                    if (tab != null && tab != _activeTab) {
+                child: BottomNavigationBar(
+                  currentIndex: _tabFromIndexReverse(_activeTab),
+                  selectedItemColor: _driverPrimary,
+                  unselectedItemColor: Colors.black54,
+                  onTap: (index) {
+                    final tab = _tabFromIndex(index);
+                    if (tab != _activeTab) {
                       setState(() => _activeTab = tab);
                     }
                   },
+                  items: const [
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.home_rounded),
+                      label: 'Home',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.history_rounded),
+                      label: 'History',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.person_outline_rounded),
+                      label: 'Profile',
+                    ),
+                  ],
                 ),
               ),
+              floatingActionButton: _activeTab == _DriverTab.home
+                  ? FloatingActionButton.extended(
+                      onPressed: () => openDriverRoute(context),
+                      icon: const Icon(Icons.navigation_rounded),
+                      label: const Text('Start route'),
+                      backgroundColor: _driverPrimary,
+                      foregroundColor: Colors.white,
+                    )
+                  : null,
             );
           },
         ),
       ),
     );
+  }
+
+  Future<void> _loadCustomers() async {
+    setState(() {
+      _loadingCustomers = true;
+      _customerError = null;
+    });
+    try {
+      final assignmentsUri = Uri.parse(ApiConfig.assignments);
+      final resp = await http.get(assignmentsUri).timeout(const Duration(seconds: 12));
+      if (resp.statusCode == 200) {
+        final decodedAssignments = _decodeCustomerList(resp.body, fromAssignments: true);
+        if (decodedAssignments.isNotEmpty) {
+          setState(() {
+            _customers = decodedAssignments;
+            _loadingCustomers = false;
+          });
+          return;
+        }
+      }
+
+      // Fallback to raw customer list when no assignments are present
+      final customersResp = await http.get(Uri.parse(ApiConfig.customerList)).timeout(const Duration(seconds: 12));
+      if (customersResp.statusCode == 200) {
+        final data = customersResp.body;
+        final decoded = _decodeCustomerList(data);
+        setState(() {
+          _customers = decoded;
+          _loadingCustomers = false;
+        });
+      } else {
+        setState(() {
+          _loadingCustomers = false;
+          _customerError = 'Failed to load customers (${customersResp.statusCode})';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _loadingCustomers = false;
+        _customerError = 'Unable to load customers';
+      });
+    }
+  }
+
+  double? _parseCoordinate(dynamic value) {
+    if (value == null) return null;
+    final raw = value.toString();
+    final match = RegExp(r'-?\d+(?:\.\d+)?').firstMatch(raw);
+    if (match != null) {
+      return double.tryParse(match.group(0)!);
+    }
+    return double.tryParse(raw);
+  }
+
+  List<_DriverCustomerStop> _decodeCustomerList(String body, {bool fromAssignments = false}) {
+    final List<_DriverCustomerStop> out = [];
+    try {
+      final decoded = jsonDecode(body);
+      final list = decoded is List ? decoded : (decoded is Map && decoded['results'] is List ? decoded['results'] : []);
+      if (list is List) {
+        for (final entry in list) {
+          if (entry is! Map<String, dynamic>) continue;
+          final map = Map<String, dynamic>.from(entry);
+          final id = map['unique_id']?.toString() ?? map['customer_id']?.toString() ?? '';
+          final name = map['customer_name']?.toString() ??
+              map['ward_name']?.toString() ??
+              map['driver_name']?.toString() ??
+              'Unknown';
+
+          final latRaw = fromAssignments ? map['customer_latitude'] : map['latitude'];
+          final lonRaw = fromAssignments ? map['customer_longitude'] : map['longitude'];
+          final lat = _parseCoordinate(latRaw);
+          final lon = _parseCoordinate(lonRaw);
+          if (id.isEmpty || lat == null || lon == null) continue;
+
+          final addressParts = [
+            map['building_no'],
+            map['street'],
+            map['area'],
+            map['pincode']
+          ].whereType<String>().where((p) => p.trim().isNotEmpty).toList();
+
+          out.add(
+            _DriverCustomerStop(
+              id: id,
+              name: name,
+              address: addressParts.join(', '),
+              location: LatLng(lat, lon),
+            ),
+          );
+        }
+      }
+    } catch (_) {}
+    return out;
   }
 
   Widget _buildTab(_DriverTab tab, LatLng driverLocation) {
@@ -326,12 +388,20 @@ class _DriverHomePageState extends State<DriverHomePage> {
         return _HomeTab(
           mapController: _mapController,
           driverLocation: driverLocation,
-          routePoints: _routePoints,
           onCenter: () => _centerOnDriver(driverLocation),
-          stops: _demoStops,
+          customers: _customers,
+          loading: _loadingCustomers,
+          error: _customerError,
+          onRefresh: _loadCustomers,
+          onStatusChanged: _updateCustomerStatus,
         );
       case _DriverTab.history:
-        return const _HistoryTab();
+        return _HistoryTab(
+          customers: _customers,
+          loading: _loadingCustomers,
+          error: _customerError,
+          onRefresh: _loadCustomers,
+        );
       case _DriverTab.profile:
         return _ProfileTab(onLogout: () => _logout(context));
     }
@@ -372,27 +442,15 @@ class _DriverHomePageState extends State<DriverHomePage> {
     }
   }
 
-  String _headerTitle(_DriverTab tab) {
+  int _tabFromIndexReverse(_DriverTab tab) {
     switch (tab) {
       case _DriverTab.history:
-        return 'Trip history';
+        return 1;
       case _DriverTab.profile:
-        return 'Driver profile';
+        return 2;
       case _DriverTab.home:
       default:
-        return 'Driver Console';
-    }
-  }
-
-  String _headerSubtitle(_DriverTab tab) {
-    switch (tab) {
-      case _DriverTab.history:
-        return 'Recent collection runs';
-      case _DriverTab.profile:
-        return 'Your shift, vehicle, and contact';
-      case _DriverTab.home:
-      default:
-        return 'Live stats - Keep moving safely';
+        return 0;
     }
   }
 
@@ -401,11 +459,84 @@ class _DriverHomePageState extends State<DriverHomePage> {
     context.read<AuthBloc>().add(AuthLogoutRequested());
   }
 
+  void _updateCustomerStatus(String id, _CustomerStatus status) {
+    setState(() {
+      _customers = _customers.map((c) {
+        if (c.id == id) {
+          return _DriverCustomerStop(
+            id: c.id,
+            name: c.name,
+            address: c.address,
+            location: c.location,
+            status: status,
+          );
+        }
+        return c;
+      }).toList();
+    });
+  }
+
+}
+
+class _MiniHeader extends StatelessWidget {
+  const _MiniHeader({
+    required this.driverName,
+    required this.onNotification,
+  });
+
+  final String driverName;
+  final VoidCallback onNotification;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: _driverPrimary,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            backgroundColor: Colors.white,
+            child: Icon(Icons.person, color: _driverPrimary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Driver',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                  ),
+                ),
+                Text(
+                  driverName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: onNotification,
+            icon: const Icon(Icons.notifications_none_rounded,
+                color: Colors.white),
+            tooltip: 'Notifications',
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _DriverHeader extends StatelessWidget {
   const _DriverHeader({
-    super.key,
     required this.title,
     required this.subtitle,
     required this.activeTab,
@@ -719,42 +850,345 @@ class _HistoryDistanceCard extends StatelessWidget {
   }
 }
 
-class _HomeTab extends StatelessWidget {
+class _HomeTab extends StatefulWidget {
   const _HomeTab({
     required this.mapController,
     required this.driverLocation,
-    required this.routePoints,
     required this.onCenter,
-    required this.stops,
+    required this.customers,
+    required this.loading,
+    required this.error,
+    required this.onRefresh,
+    required this.onStatusChanged,
   });
 
   final MapController mapController;
   final LatLng driverLocation;
-  final List<LatLng> routePoints;
   final VoidCallback onCenter;
-  final List<_DemoStop> stops;
+  final List<_DriverCustomerStop> customers;
+  final bool loading;
+  final String? error;
+  final Future<void> Function() onRefresh;
+  final void Function(String id, _CustomerStatus status) onStatusChanged;
+
+  @override
+  State<_HomeTab> createState() => _HomeTabState();
+}
+
+enum _CustomerStatus { pending, collected, skipped }
+
+class _DriverCustomerStop {
+  final String id;
+  final String name;
+  final String address;
+  final LatLng location;
+  _CustomerStatus status;
+
+  _DriverCustomerStop({
+    required this.id,
+    required this.name,
+    required this.address,
+    required this.location,
+    this.status = _CustomerStatus.pending,
+  });
+}
+
+class _HomeTabState extends State<_HomeTab> {
+  late List<_DriverCustomerStop> _customers;
+
+  @override
+  void initState() {
+    super.initState();
+    _customers = widget.customers;
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.customers != widget.customers) {
+      _customers = List<_DriverCustomerStop>.from(widget.customers);
+    }
+  }
+
+  Color _statusColor(_CustomerStatus status) {
+    switch (status) {
+      case _CustomerStatus.collected:
+        return Colors.green;
+      case _CustomerStatus.skipped:
+        return Colors.orange;
+      case _CustomerStatus.pending:
+      default:
+        return Colors.red;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _MapCard(
-            mapController: mapController,
-            driverLocation: driverLocation,
-            routePoints: routePoints,
-            onCenter: onCenter,
-            stops: stops,
-          ),
-          const SizedBox(height: 16),
-          _RecentHistorySection(entries: _weeklyHistory),
-        ],
+    final routeLinePoints = <LatLng>[
+      widget.driverLocation,
+      ..._customers.map((c) => c.location),
+    ];
+
+    return RefreshIndicator(
+      onRefresh: widget.onRefresh,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final mapHeight = constraints.maxHeight;
+          return Stack(
+            children: [
+              SizedBox(
+                height: mapHeight,
+                width: double.infinity,
+                child: FlutterMap(
+                  mapController: widget.mapController,
+                  options: MapOptions(
+                    initialCenter: widget.driverLocation,
+                    initialZoom: 14.5,
+                    minZoom: 10,
+                    maxZoom: 18,
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                    ),
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      subdomains: const ['a', 'b', 'c'],
+                      userAgentPackageName: 'com.iwms.citizen.app',
+                    ),
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: routeLinePoints,
+                          color: _driverPrimary.withOpacity(0.6),
+                          strokeWidth: 3.5,
+                        ),
+                      ],
+                    ),
+                    if (_customers.isNotEmpty)
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            width: 42,
+                            height: 42,
+                            point: widget.driverLocation,
+                            child: const _DriverMarker(isActive: true),
+                          ),
+                          ..._customers.map(
+                            (c) => Marker(
+                              width: 36,
+                              height: 36,
+                              point: c.location,
+                              child: _HouseMarker(
+                                color: _statusColor(c.status),
+                                label: c.name.substring(0, 1).toUpperCase(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+              Positioned(
+                top: 12,
+                right: 12,
+                child: Column(
+                  children: [
+                    _CircleIconButton(
+                      icon: Icons.gps_fixed_rounded,
+                      onPressed: widget.onCenter,
+                    ),
+                    const SizedBox(height: 10),
+                    _CircleIconButton(
+                      icon: Icons.refresh_rounded,
+                      onPressed: () => widget.onRefresh(),
+                    ),
+                  ],
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 12,
+                child: SizedBox(
+                  height: 140,
+                  child: widget.loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : widget.error != null
+                          ? Center(
+                              child: Text(
+                                widget.error!,
+                                style: const TextStyle(
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            )
+                          : _customers.isEmpty
+                              ? const Center(
+                                  child: Text('No customers assigned'),
+                                )
+                              : ListView.separated(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 16),
+                                  scrollDirection: Axis.horizontal,
+                                  itemBuilder: (context, index) {
+                                    final customer = _customers[index];
+                                    final color = _statusColor(customer.status);
+                                    return SizedBox(
+                                      width: 230,
+                                      child: Card(
+                                        elevation: 5,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                        ),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(10),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  CircleAvatar(
+                                                    radius: 16,
+                                                    backgroundColor:
+                                                        color.withOpacity(0.15),
+                                                    child: Text(
+                                                      customer.name[0]
+                                                          .toUpperCase(),
+                                                      style:
+                                                          TextStyle(color: color),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment.start,
+                                                      children: [
+                                                        Text(
+                                                          customer.name,
+                                                          style: const TextStyle(
+                                                            fontWeight:
+                                                                FontWeight.w800,
+                                                          ),
+                                                          maxLines: 1,
+                                                          overflow:
+                                                              TextOverflow.ellipsis,
+                                                        ),
+                                                        Text(
+                                                          customer.address,
+                                                          style: TextStyle(
+                                                            color: Colors.black
+                                                                .withOpacity(0.6),
+                                                            fontSize: 11,
+                                                          ),
+                                                          maxLines: 1,
+                                                          overflow:
+                                                              TextOverflow.ellipsis,
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color:
+                                                          color.withOpacity(0.12),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              10),
+                                                    ),
+                                                    child: Text(
+                                                      customer.status.name,
+                                                      style: TextStyle(
+                                                        color: color,
+                                                        fontWeight: FontWeight.w700,
+                                                        fontSize: 10,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const Spacer(),
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: ElevatedButton(
+                                                      style: ElevatedButton
+                                                          .styleFrom(
+                                                        backgroundColor:
+                                                            Colors.green.shade700,
+                                                        foregroundColor:
+                                                            Colors.white,
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                                vertical: 8),
+                                                      ),
+                                                      onPressed: () {
+                                                        setState(() {
+                                                          customer.status =
+                                                              _CustomerStatus
+                                                                  .collected;
+                                                        });
+                                                        widget.onStatusChanged(
+                                                            customer.id,
+                                                            _CustomerStatus
+                                                                .collected);
+                                                      },
+                                                      child:
+                                                          const Text('Complete'),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Expanded(
+                                                    child: OutlinedButton(
+                                                      style: OutlinedButton
+                                                          .styleFrom(
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                                vertical: 8),
+                                                      ),
+                                                      onPressed: () {
+                                                        setState(() {
+                                                          customer.status =
+                                                              _CustomerStatus
+                                                                  .skipped;
+                                                        });
+                                                        widget.onStatusChanged(
+                                                            customer.id,
+                                                            _CustomerStatus
+                                                                .skipped);
+                                                      },
+                                                      child: const Text('Skip'),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(width: 10),
+                                  itemCount: _customers.length,
+                                ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
-
 }
 
 class _RecentHistorySection extends StatelessWidget {
@@ -1001,27 +1435,44 @@ class _DriverMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 240),
+    final double size = isActive ? 26 : 22;
+    return Image.asset(
+      'assets/images/arrow.png',
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+    );
+  }
+}
+
+class _HouseMarker extends StatelessWidget {
+  const _HouseMarker({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
       decoration: BoxDecoration(
-        color: isActive ? _driverPrimary : Colors.white,
-        border: Border.all(
-          color: isActive ? Colors.white : _driverPrimary.withOpacity(0.6),
-          width: 2,
-        ),
+        color: color.withOpacity(0.14),
         shape: BoxShape.circle,
+        border: Border.all(color: color, width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(0.16),
+            blurRadius: 10,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-      child: Icon(
-        isActive ? Icons.navigation_rounded : Icons.location_on_outlined,
-        color: isActive ? Colors.white : _driverPrimary,
-        size: isActive ? 20 : 18,
+      alignment: Alignment.center,
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
@@ -1566,17 +2017,153 @@ const List<_CollectionEntry> _weeklyHistory = [
 ];
 
 class _HistoryTab extends StatelessWidget {
-  const _HistoryTab();
+  const _HistoryTab({
+    required this.customers,
+    required this.loading,
+    required this.error,
+    required this.onRefresh,
+  });
+
+  final List<_DriverCustomerStop> customers;
+  final bool loading;
+  final String? error;
+  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      itemCount: _weeklyHistory.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, index) {
-        final entry = _weeklyHistory[index];
-        return _HistoryCard(entry: entry);
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        children: [
+          const Text(
+            'History',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (loading)
+            const Center(child: Padding(
+              padding: EdgeInsets.all(20.0),
+              child: CircularProgressIndicator(),
+            ))
+          else if (error != null)
+            Center(
+              child: Text(
+                error!,
+                style: const TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            )
+          else if (customers.isEmpty)
+            const Center(child: Text('No history available'))
+          else
+            ...customers.map((c) {
+              final color = c.status == _CustomerStatus.collected
+                  ? Colors.green
+                  : c.status == _CustomerStatus.skipped
+                      ? Colors.orange
+                      : Colors.red;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: color.withOpacity(0.15),
+                    child: Text(
+                      c.name[0].toUpperCase(),
+                      style: TextStyle(color: color),
+                    ),
+                  ),
+                  title: Text(
+                    c.name,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  subtitle: Text(
+                    c.address,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      c.status.name,
+                      style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                  onTap: () {
+                    _showCollectedWaste(context, c);
+                  },
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  void _showCollectedWaste(BuildContext context, _DriverCustomerStop customer) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                customer.name,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                customer.address,
+                style: TextStyle(
+                  color: Colors.black.withOpacity(0.7),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Icon(Icons.recycling, color: _driverPrimary),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Status: ${customer.status.name}',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Collected weights data not available yet.',
+                style: TextStyle(fontSize: 13),
+              ),
+            ],
+          ),
+        );
       },
     );
   }

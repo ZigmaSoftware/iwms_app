@@ -720,7 +720,7 @@ class _AttendancePageState extends State<AttendancePage> {
                       SizedBox(height: 10),
                       ..._pendingSync
                           .map((item) => _pendingSyncTile(item))
-                          .toList(),
+                          ,
                     ],
                   ),
                 ),

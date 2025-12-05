@@ -883,14 +883,16 @@ Future<void> fetchAttendanceData() async {
                       
                             Color bgColor;
                       
-                            if (isHoliday) bgColor = Color(0xFFFD05AE);
-                            else if (isLeave && dayStatus == 'Half Day') bgColor = Color(0xFFBF4040);
+                            if (isHoliday) {
+                              bgColor = Color(0xFFFD05AE);
+                            } else if (isLeave && dayStatus == 'Half Day') bgColor = Color(0xFFBF4040);
                             else if (isLeave || dayStatus == 'Absent') bgColor = Color(0xFFF55D6B);
                             else if (isPermission && isPresent) bgColor = Color(0xFFBF4040);
                             else if (isPermission) bgColor = Color(0xFF6294BA);
                             else if (isPresent) {
-                              if (dayStatus == 'Full Day') bgColor = Color(0xFF72D58A);
-                              else if (dayStatus == 'Half Day') bgColor = Color(0xFFF8C74A);
+                              if (dayStatus == 'Full Day') {
+                                bgColor = Color(0xFF72D58A);
+                              } else if (dayStatus == 'Half Day') bgColor = Color(0xFFF8C74A);
                               else if (dayStatus == 'Short Hours') bgColor = Color(0xFF5DA1F5);
                               else bgColor = Colors.grey.shade600;
                             } else if (isSunday) bgColor = Color(0xFF6294BA);

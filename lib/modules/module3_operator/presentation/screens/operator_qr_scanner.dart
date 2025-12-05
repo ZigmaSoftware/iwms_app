@@ -7,7 +7,6 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/locationservices.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_data_screen.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
 
 class OperatorQRScanner extends StatefulWidget {

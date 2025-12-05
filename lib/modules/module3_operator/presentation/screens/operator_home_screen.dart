@@ -200,7 +200,7 @@ class _InfoRowItem extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.value,
-    this.expand = true,
+    this.expand = false,
   });
 
   final IconData icon;

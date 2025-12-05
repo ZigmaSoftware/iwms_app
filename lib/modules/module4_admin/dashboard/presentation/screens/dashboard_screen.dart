@@ -15,6 +15,7 @@ import 'package:iwms_citizen_app/features/citizen_dashboard/track/services/track
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
+import 'assign_form_sheet.dart';
 
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/map.dart'
     as citizen_map;
@@ -30,18 +31,18 @@ const _iconGray = Color(0xFF9E9E9E);
 const _borderGray = Color(0xFFE0E0E0);
 
 List<BoxShadow> _softCardShadow() => [
-      BoxShadow(
-        color: Colors.black.withValues(alpha: 0.07),
-        blurRadius: 16,
-        offset: const Offset(0, 6),
-      ),
-    ];
+  BoxShadow(
+    color: Colors.black.withValues(alpha: 0.07),
+    blurRadius: 16,
+    offset: const Offset(0, 6),
+  ),
+];
 
 BoxDecoration _cardDecoration({Color color = _cardBackground}) => BoxDecoration(
-      color: color,
-      borderRadius: BorderRadius.circular(18),
-      boxShadow: _softCardShadow(),
-    );
+  color: color,
+  borderRadius: BorderRadius.circular(18),
+  boxShadow: _softCardShadow(),
+);
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -82,8 +83,9 @@ class _DashboardShellState extends State<_DashboardShell> {
     final dateRangeFuture = _trackService
         .fetchDateWiseSummaries(fromDate, today)
         .catchError((_) => <WasteSummary>[]);
-    final dayTicketsFuture =
-        _trackService.fetchDayWiseTickets(today).catchError((_) => <DayWiseTicket>[]);
+    final dayTicketsFuture = _trackService
+        .fetchDayWiseTickets(today)
+        .catchError((_) => <DayWiseTicket>[]);
     final vehicleWeightsFuture = _trackService
         .fetchVehicleWiseReport(today)
         .catchError((_) => <VehicleWeightReport>[]);
@@ -212,65 +214,60 @@ class _DashboardHomeContent extends StatelessWidget {
     final rangeSummaries = data.dateRangeSummaries;
     final wasteSlices = [
       _WasteSlice('Wet Waste', summary?.wetWeight ?? 0, _primaryGreen),
-      _WasteSlice('Dry Waste', summary?.dryWeight ?? 0, const Color(0xFF2979FF)),
-      _WasteSlice('Mixed Waste', summary?.mixWeight ?? 0, const Color(0xFFFFB74D)),
+      _WasteSlice(
+        'Dry Waste',
+        summary?.dryWeight ?? 0,
+        const Color(0xFF2979FF),
+      ),
+      _WasteSlice(
+        'Mixed Waste',
+        summary?.mixWeight ?? 0,
+        const Color(0xFFFFB74D),
+      ),
     ];
     final statusCounts = data.statusCounts;
-    final pendingApprovals = _mockApprovalRequests
-        .where((r) => r.status == _ApprovalStatus.pending)
-        .length;
-    final acceptedApprovals = _mockApprovalRequests
-        .where((r) => r.status == _ApprovalStatus.approved)
-        .length;
 
     return Column(
       children: [
         _HeaderHero(maxWidth: maxWidth),
-        Transform.translate(
-          offset: const Offset(0, -20),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: _bgWhite,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: _softCardShadow(),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 22),
-              child: Column(
-                children: [
-                  _DailyWasteCard(summary: summary, slices: wasteSlices),
-                  const SizedBox(height: 12),
-                  _NotificationsCard(
-                    pendingApprovals: pendingApprovals,
-                    acceptedApprovals: acceptedApprovals,
-                  ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: _bgWhite,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: _softCardShadow(),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 22),
+            child: Column(
+              children: [
+                _DailyWasteCard(summary: summary, slices: wasteSlices),
+                const SizedBox(height: 12),
+                const _AssignCard(),
+                const SizedBox(height: 16),
+                _AttendanceRow(
+                  statusCounts: statusCounts,
+                  totalVehicles: data.vehicles.length,
+                ),
+                const SizedBox(height: 16),
+                _ActivityAndVehicleRow(
+                  vehicles: data.vehicles,
+                  statusCounts: statusCounts,
+                  summary: summary,
+                ),
+                if (monthSeries.isNotEmpty ||
+                    vehicleWeights.isNotEmpty ||
+                    dayTickets.isNotEmpty) ...[
                   const SizedBox(height: 16),
-                  _AttendanceRow(
-                    statusCounts: statusCounts,
-                    totalVehicles: data.vehicles.length,
+                  _WeighbridgeInsights(
+                    monthSeries: monthSeries,
+                    rangeSummaries: rangeSummaries,
+                    dayTickets: dayTickets,
+                    vehicleWeights: vehicleWeights,
                   ),
-                  const SizedBox(height: 16),
-                  _ActivityAndVehicleRow(
-                    vehicles: data.vehicles,
-                    statusCounts: statusCounts,
-                    summary: summary,
-                  ),
-                  if (monthSeries.isNotEmpty ||
-                      vehicleWeights.isNotEmpty ||
-                      dayTickets.isNotEmpty)
-                    ...[
-                      const SizedBox(height: 16),
-                      _WeighbridgeInsights(
-                        monthSeries: monthSeries,
-                        rangeSummaries: rangeSummaries,
-                        dayTickets: dayTickets,
-                        vehicleWeights: vehicleWeights,
-                      ),
-                    ],
                 ],
-              ),
+              ],
             ),
           ),
         ),
@@ -286,61 +283,83 @@ class _HeaderHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 140,
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xCCFFFFFF), Color(0x99FFFFFF)],
-        ),
-        image: DecorationImage(
-          image: AssetImage('assets/images/admin_header.png'),
-          fit: BoxFit.cover,
-          alignment: Alignment.centerRight,
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          Expanded(
-            child: Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    boxShadow: _softCardShadow(),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(6),
-                    child: Image.asset(
-                      'asset/images/logo.png',
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Icon(Icons.eco, color: _primaryGreen),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  'IWMS',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: Color.fromARGB(255, 255, 255, 255),
-                  ),
-                ),
-              ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          height: 140,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xCCFFFFFF), Color(0x99FFFFFF)],
+            ),
+            image: DecorationImage(
+              image: AssetImage('assets/images/admin_header.png'),
+              fit: BoxFit.cover,
+              alignment: Alignment.centerRight,
             ),
           ),
-        ],
-      ),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                        boxShadow: _softCardShadow(),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Image.asset(
+                          'asset/images/logo.png',
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) =>
+                              const Icon(Icons.eco, color: _primaryGreen),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'IWMS',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: Color.fromARGB(255, 255, 255, 255),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
     );
   }
 }
+
+void _showAssignSheet(BuildContext context) {
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) {
+      return const AssignFormSheet();
+    },
+  );
+}
+
 class _DailyWasteCard extends StatelessWidget {
   const _DailyWasteCard({required this.summary, required this.slices});
 
@@ -369,25 +388,25 @@ class _DailyWasteCard extends StatelessWidget {
                   children: [
                     Text(
                       'Daily Waste Collection',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: _iconGray),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: _iconGray),
                     ),
                   ],
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: _primaryGreen.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
@@ -399,13 +418,13 @@ class _DailyWasteCard extends StatelessWidget {
                     Text(
                       'Live',
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: _primaryGreen,
-                            fontWeight: FontWeight.w700,
-                          ),
+                        color: _primaryGreen,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
-              )
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -419,16 +438,15 @@ class _DailyWasteCard extends StatelessWidget {
                   alignment: Alignment.center,
                   children: [
                     CustomPaint(
-                        size: const Size.square(140),
-                        painter: _WasteDonutPainter(slices: slices)),
+                      size: const Size.square(140),
+                      painter: _WasteDonutPainter(slices: slices),
+                    ),
                     Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           total.toStringAsFixed(1),
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
+                          style: Theme.of(context).textTheme.headlineSmall
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 4),
@@ -496,10 +514,7 @@ class _DailyWasteCard extends StatelessWidget {
                       children: [
                         chart,
                         const SizedBox(width: 16),
-                        Flexible(
-                          fit: FlexFit.loose,
-                          child: legendContent,
-                        ),
+                        Flexible(fit: FlexFit.loose, child: legendContent),
                       ],
                     );
             },
@@ -508,10 +523,9 @@ class _DailyWasteCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               'Average per trip: ${summary!.averageWeightPerTrip.toStringAsFixed(2)} tons across ${summary!.totalTrip} trips',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: _iconGray),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: _iconGray),
             ),
           ],
         ],
@@ -520,9 +534,58 @@ class _DailyWasteCard extends StatelessWidget {
   }
 }
 
+class _AssignCard extends StatelessWidget {
+  const _AssignCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: _cardDecoration(),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.assignment_ind_rounded, color: _primaryGreen),
+              const SizedBox(width: 8),
+              Text(
+                'Assign Driver & Operator',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Select ward (e.g., Gamma), then pick available driver and operator from the database.',
+            style: TextStyle(color: _iconGray),
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton(
+              onPressed: () => _showAssignSheet(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryGreen,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Assign'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _NotificationsCard extends StatelessWidget {
-  const _NotificationsCard(
-      {required this.pendingApprovals, required this.acceptedApprovals});
+  const _NotificationsCard({
+    required this.pendingApprovals,
+    required this.acceptedApprovals,
+  });
 
   final int pendingApprovals;
   final int acceptedApprovals;
@@ -545,8 +608,10 @@ class _NotificationsCard extends StatelessWidget {
                   shape: BoxShape.circle,
                   boxShadow: _softCardShadow(),
                 ),
-                child: const Icon(Icons.notifications_active,
-                    color: _primaryGreen),
+                child: const Icon(
+                  Icons.notifications_active,
+                  color: _primaryGreen,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -556,17 +621,19 @@ class _NotificationsCard extends StatelessWidget {
                     Text(
                       'Approval notifications',
                       style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: _primaryGreen),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: _primaryGreen,
+                      ),
                     ),
                     SizedBox(height: 2),
                     Text(
                       'Review leave requests from drivers and operators.',
                       style: TextStyle(
-                          fontSize: 12,
-                          color: _iconGray,
-                          fontWeight: FontWeight.w500),
+                        fontSize: 12,
+                        color: _iconGray,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),
@@ -596,8 +663,11 @@ class _NotificationsCard extends StatelessWidget {
 }
 
 class _NotificationChip extends StatelessWidget {
-  const _NotificationChip(
-      {required this.label, required this.value, required this.color});
+  const _NotificationChip({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   final String label;
   final int value;
@@ -625,14 +695,20 @@ class _NotificationChip extends StatelessWidget {
               child: Text(
                 label,
                 style: TextStyle(
-                    fontWeight: FontWeight.w700, color: color, fontSize: 13),
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                  fontSize: 13,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
             Text(
               '$value',
               style: TextStyle(
-                  fontWeight: FontWeight.w800, color: color, fontSize: 16),
+                fontWeight: FontWeight.w800,
+                color: color,
+                fontSize: 16,
+              ),
             ),
           ],
         ),
@@ -785,7 +861,9 @@ class _ActivityAndVehicleRow extends StatelessWidget {
       ),
       _ActivityEntry(
         'Latest update',
-        lastUpdate != null ? 'Last seen ${_formatRelative(lastUpdate)}' : 'Awaiting telemetry',
+        lastUpdate != null
+            ? 'Last seen ${_formatRelative(lastUpdate)}'
+            : 'Awaiting telemetry',
         lastUpdate != null ? ActivityTone.success : ActivityTone.warning,
       ),
     ];
@@ -808,12 +886,17 @@ class _WeighbridgeInsights extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NumberFormat weightFormat = NumberFormat.decimalPattern();
-    final totalsSource =
-        rangeSummaries.isNotEmpty ? rangeSummaries : monthSeries;
+    final totalsSource = rangeSummaries.isNotEmpty
+        ? rangeSummaries
+        : monthSeries;
     final double mtdNet = totalsSource.fold<double>(
-        0, (sum, item) => sum + item.totalNetWeight);
-    final int mtdTrips =
-        totalsSource.fold<int>(0, (sum, item) => sum + item.totalTrip);
+      0,
+      (sum, item) => sum + item.totalNetWeight,
+    );
+    final int mtdTrips = totalsSource.fold<int>(
+      0,
+      (sum, item) => sum + item.totalTrip,
+    );
 
     final topVehicles = List<VehicleWeightReport>.from(vehicleWeights)
       ..sort((a, b) => b.totalWeight.compareTo(a.totalWeight));
@@ -828,10 +911,9 @@ class _WeighbridgeInsights extends StatelessWidget {
         children: [
           Text(
             'Weighbridge Insights',
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           const Text(
@@ -865,28 +947,28 @@ class _WeighbridgeInsights extends StatelessWidget {
             const SizedBox(height: 14),
             Text(
               'Top vehicles (weight)',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyLarge
-                  ?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
-            ...topVehicles.take(3).map(
-              (v) => _insightRow(
-                icon: Icons.local_shipping,
-                leading: v.vehicleNo,
-                trailing: '${weightFormat.format(v.totalWeight)} kg',
-              ),
-            ),
+            ...topVehicles
+                .take(3)
+                .map(
+                  (v) => _insightRow(
+                    icon: Icons.local_shipping,
+                    leading: v.vehicleNo,
+                    trailing: '${weightFormat.format(v.totalWeight)} kg',
+                  ),
+                ),
           ],
           if (latestTickets.isNotEmpty) ...[
             const SizedBox(height: 14),
             Text(
               'Latest weighbridge tickets',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyLarge
-                  ?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             ...latestTickets.map(
@@ -987,10 +1069,7 @@ class _WeighbridgeInsights extends StatelessWidget {
                 if (subtitle != null)
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: _iconGray,
-                      fontSize: 12,
-                    ),
+                    style: const TextStyle(color: _iconGray, fontSize: 12),
                   ),
               ],
             ),
@@ -1025,10 +1104,9 @@ class _RecentActivityCard extends StatelessWidget {
         children: [
           Text(
             'Recent Activity',
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
           ...entries.map(
@@ -1062,7 +1140,7 @@ class _RecentActivityCard extends StatelessWidget {
                 ],
               ),
             ),
-          )
+          ),
         ],
       ),
     );
@@ -1082,25 +1160,30 @@ class _VehicleStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cards = <_StatusCount>[
       _StatusCount(
-          label: 'Running',
-          value: statusCounts[_VehicleState.running] ?? 0,
-          color: _primaryGreen),
+        label: 'Running',
+        value: statusCounts[_VehicleState.running] ?? 0,
+        color: _primaryGreen,
+      ),
       _StatusCount(
-          label: 'Idle',
-          value: statusCounts[_VehicleState.idle] ?? 0,
-          color: _softYellow),
+        label: 'Idle',
+        value: statusCounts[_VehicleState.idle] ?? 0,
+        color: _softYellow,
+      ),
       _StatusCount(
-          label: 'Stopped',
-          value: statusCounts[_VehicleState.parked] ?? 0,
-          color: _softRed),
+        label: 'Stopped',
+        value: statusCounts[_VehicleState.parked] ?? 0,
+        color: _softRed,
+      ),
       _StatusCount(
-          label: 'No Data',
-          value: statusCounts[_VehicleState.nodata] ?? 0,
-          color: _iconGray),
+        label: 'No Data',
+        value: statusCounts[_VehicleState.nodata] ?? 0,
+        color: _iconGray,
+      ),
     ];
 
-    final highlighted =
-        vehicles.isNotEmpty ? vehicles.firstWhere((_) => true) : null;
+    final highlighted = vehicles.isNotEmpty
+        ? vehicles.firstWhere((_) => true)
+        : null;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -1111,10 +1194,9 @@ class _VehicleStatusCard extends StatelessWidget {
         children: [
           Text(
             'Vehicle Status',
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 10),
           ...cards.map(
@@ -1186,10 +1268,7 @@ class _VehicleStatusCard extends StatelessWidget {
                         highlighted.address ?? 'Live telemetry',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _iconGray,
-                          fontSize: 12,
-                        ),
+                        style: const TextStyle(color: _iconGray, fontSize: 12),
                       ),
                     ],
                   ),
@@ -1205,10 +1284,7 @@ class _VehicleStatusCard extends StatelessWidget {
 }
 
 class _DashboardNavBar extends StatelessWidget {
-  const _DashboardNavBar({
-    required this.currentIndex,
-    required this.onChanged,
-  });
+  const _DashboardNavBar({required this.currentIndex, required this.onChanged});
 
   final int currentIndex;
   final ValueChanged<int> onChanged;
@@ -1225,14 +1301,8 @@ class _DashboardNavBar extends StatelessWidget {
       selectedFontSize: 11,
       unselectedFontSize: 11,
       items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home_outlined),
-          label: 'Home',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.map_outlined),
-          label: 'Map',
-        ),
+        BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Home'),
+        BottomNavigationBarItem(icon: Icon(Icons.map_outlined), label: 'Map'),
         BottomNavigationBarItem(
           icon: Icon(Icons.fact_check_outlined),
           label: 'Approvals',
@@ -1241,10 +1311,7 @@ class _DashboardNavBar extends StatelessWidget {
           icon: Icon(Icons.directions_bus_outlined),
           label: 'Vehicles',
         ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.more_horiz),
-          label: 'More',
-        ),
+        BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'More'),
       ],
     );
   }
@@ -1259,9 +1326,7 @@ class AdminMapScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Reuse the production map experience (live vehicles, polygons, filters).
-    return const citizen_map.MapScreen(
-      showBackButton: false,
-    );
+    return const citizen_map.MapScreen(showBackButton: false);
   }
 }
 // ---------------------------------------------------------------------------
@@ -1288,8 +1353,10 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
   void initState() {
     super.initState();
     _fetchVehicles();
-    _poller =
-        Timer.periodic(const Duration(seconds: 30), (_) => _fetchVehicles(silent: true));
+    _poller = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _fetchVehicles(silent: true),
+    );
   }
 
   @override
@@ -1329,55 +1396,54 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : _error != null
-                ? ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-                    children: const [
-                      Text('Unable to load vehicle list.',
-                          style: TextStyle(color: _iconGray)),
-                    ],
-                  )
-                : ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-                    children: [
-                      const _SectionHeader(
-                        title: 'Vehicles',
-                        subtitle: 'Live feed from vehicle tracking API',
+            ? ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+                children: const [
+                  Text(
+                    'Unable to load vehicle list.',
+                    style: TextStyle(color: _iconGray),
+                  ),
+                ],
+              )
+            : ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+                children: [
+                  const _SectionHeader(
+                    title: 'Vehicles',
+                    subtitle: 'Live feed from vehicle tracking API',
+                  ),
+                  const SizedBox(height: 12),
+                  _VehicleStatusCard(
+                    vehicles: _vehicles,
+                    statusCounts: _DashboardData.countByStatus(_vehicles),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: ElevatedButton.icon(
+                      icon: Icon(
+                        _showList ? Icons.list_alt : Icons.directions_bus,
                       ),
-                      const SizedBox(height: 12),
-                      _VehicleStatusCard(
-                        vehicles: _vehicles,
-                        statusCounts:
-                            _DashboardData.countByStatus(_vehicles),
-                      ),
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: ElevatedButton.icon(
-                          icon: Icon(
-                            _showList
-                                ? Icons.list_alt
-                                : Icons.directions_bus,
-                          ),
-                          label: Text(_showList ? 'Hide vehicles' : 'All vehicles'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _primaryGreen,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          onPressed: () =>
-                              setState(() => _showList = !_showList),
+                      label: Text(_showList ? 'Hide vehicles' : 'All vehicles'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _primaryGreen,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      if (_showList)
-                        ..._vehicles
-                            .map((vehicle) => _VehicleTile(vehicle: vehicle)),
-                    ],
+                      onPressed: () => setState(() => _showList = !_showList),
+                    ),
                   ),
+                  const SizedBox(height: 8),
+                  if (_showList)
+                    ..._vehicles.map(
+                      (vehicle) => _VehicleTile(vehicle: vehicle),
+                    ),
+                ],
+              ),
       ),
     );
   }
@@ -1404,10 +1470,7 @@ class _VehicleTile extends StatelessWidget {
               shape: BoxShape.circle,
               color: _softGreen.withValues(alpha: 0.45),
             ),
-            child: const Icon(
-              Icons.local_shipping,
-              color: _primaryGreen,
-            ),
+            child: const Icon(Icons.local_shipping, color: _primaryGreen),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1493,20 +1556,23 @@ enum _ApprovalStatus { pending, approved, rejected }
 
 const _mockApprovalRequests = <_ApprovalRequest>[
   _ApprovalRequest(
-      title: 'Driver | Arun Menon',
-      subtitle: 'Annual leave - 3 days - requested by driver',
-      status: _ApprovalStatus.pending,
-      dateLabel: 'Dec 12, 2025'),
+    title: 'Driver | Arun Menon',
+    subtitle: 'Annual leave - 3 days - requested by driver',
+    status: _ApprovalStatus.pending,
+    dateLabel: 'Dec 12, 2025',
+  ),
   _ApprovalRequest(
-      title: 'Operator | Lata Fernandes',
-      subtitle: 'Sick leave - 1 day - requested by operator',
-      status: _ApprovalStatus.approved,
-      dateLabel: 'Dec 10, 2025'),
+    title: 'Operator | Lata Fernandes',
+    subtitle: 'Sick leave - 1 day - requested by operator',
+    status: _ApprovalStatus.approved,
+    dateLabel: 'Dec 10, 2025',
+  ),
   _ApprovalRequest(
-      title: 'Driver | Naveen Pillai',
-      subtitle: 'Shift swap fallback - requested by driver',
-      status: _ApprovalStatus.rejected,
-      dateLabel: 'Dec 08, 2025'),
+    title: 'Driver | Naveen Pillai',
+    subtitle: 'Shift swap fallback - requested by driver',
+    status: _ApprovalStatus.rejected,
+    dateLabel: 'Dec 08, 2025',
+  ),
 ];
 
 // ---------------------------------------------------------------------------
@@ -1533,25 +1599,29 @@ class _ApprovalsScreen extends StatelessWidget {
 
     final tiles = [
       _ApprovalGridTile(
-          title: 'Driver',
-          count: driverCount,
-          color: _primaryGreen,
-          icon: Icons.local_shipping_outlined),
+        title: 'Driver',
+        count: driverCount,
+        color: _primaryGreen,
+        icon: Icons.local_shipping_outlined,
+      ),
       _ApprovalGridTile(
-          title: 'Operator',
-          count: operatorCount,
-          color: const Color(0xFF1565C0),
-          icon: Icons.support_agent),
+        title: 'Operator',
+        count: operatorCount,
+        color: const Color(0xFF1565C0),
+        icon: Icons.support_agent,
+      ),
       _ApprovalGridTile(
-          title: 'Pending',
-          count: pendingCount,
-          color: const Color(0xFFF9A825),
-          icon: Icons.schedule_outlined),
+        title: 'Pending',
+        count: pendingCount,
+        color: const Color(0xFFF9A825),
+        icon: Icons.schedule_outlined,
+      ),
       _ApprovalGridTile(
-          title: 'Accepted',
-          count: acceptedCount,
-          color: const Color(0xFF2E7D32),
-          icon: Icons.check_circle_outline),
+        title: 'Accepted',
+        count: acceptedCount,
+        color: const Color(0xFF2E7D32),
+        icon: Icons.check_circle_outline,
+      ),
     ];
 
     return SafeArea(
@@ -1566,27 +1636,30 @@ class _ApprovalsScreen extends StatelessWidget {
               subtitle: 'Leave approvals from drivers and operators',
             ),
             const SizedBox(height: 12),
-            LayoutBuilder(builder: (context, constraints) {
-              const spacing = 12.0;
-              final width = constraints.maxWidth;
-              const columns = 2;
-              final tileWidth =
-                  (width - spacing * (columns - 1)) / columns;
+            LayoutBuilder(
+              builder: (context, constraints) {
+                const spacing = 12.0;
+                final width = constraints.maxWidth;
+                const columns = 2;
+                final tileWidth = (width - spacing * (columns - 1)) / columns;
 
-              return Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: tiles
-                    .map(
-                      (tile) => ConstrainedBox(
-                        constraints: BoxConstraints(
-                            minWidth: tileWidth, maxWidth: tileWidth),
-                        child: tile,
-                      ),
-                    )
-                    .toList(),
-              );
-            }),
+                return Wrap(
+                  spacing: spacing,
+                  runSpacing: spacing,
+                  children: tiles
+                      .map(
+                        (tile) => ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minWidth: tileWidth,
+                            maxWidth: tileWidth,
+                          ),
+                          child: tile,
+                        ),
+                      )
+                      .toList(),
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -1595,11 +1668,12 @@ class _ApprovalsScreen extends StatelessWidget {
 }
 
 class _ApprovalGridTile extends StatelessWidget {
-  const _ApprovalGridTile(
-      {required this.title,
-      required this.count,
-      required this.color,
-      required this.icon});
+  const _ApprovalGridTile({
+    required this.title,
+    required this.count,
+    required this.color,
+    required this.icon,
+  });
 
   final String title;
   final int count;
@@ -1632,18 +1706,16 @@ class _ApprovalGridTile extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '$count',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: _iconGray),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: _iconGray),
                 ),
               ],
             ),
@@ -1911,8 +1983,7 @@ class _ActivityEntry {
   final String subtitle;
   final ActivityTone tone;
 
-  Color get color =>
-      tone == ActivityTone.success ? _primaryGreen : _softYellow;
+  Color get color => tone == ActivityTone.success ? _primaryGreen : _softYellow;
   IconData get icon => tone == ActivityTone.success
       ? Icons.check_circle_outline
       : Icons.warning_amber_outlined;
@@ -1933,18 +2004,16 @@ class _SectionHeader extends StatelessWidget {
       children: [
         Text(
           title,
-          style: Theme.of(context)
-              .textTheme
-              .titleLarge
-              ?.copyWith(fontWeight: FontWeight.w800),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 4),
         Text(
           subtitle,
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: _iconGray),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: _iconGray),
         ),
       ],
     );
