@@ -606,7 +606,7 @@ class _MapScreenState extends State<MapScreen> {
               decoration: const InputDecoration(
                 contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 5),
                 hintText: 'Search vehicle / ward / driver',
-                hintStyle: TextStyle(color: Colors.black54),
+                hintStyle: TextStyle(color: Color.fromARGB(137, 0, 0, 0)),
                 border: InputBorder.none,
               ),
               onChanged: (value) => setState(() => _searchQuery = value.trim()),
@@ -845,7 +845,7 @@ class _VehicleMarker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusColor = getVehicleStatusColor(vehicle.status);
-    final size = isSelected ? 45.0 : 30.0;
+    final size = isSelected ? 30.0 : 22.0;
 
     return Column(
       children: [
@@ -853,24 +853,11 @@ class _VehicleMarker extends StatelessWidget {
           duration: const Duration(milliseconds: 200),
           height: size,
           width: size,
-          decoration: BoxDecoration(
+          child: Image.asset(
+            'assets/images/arrow.png',
             color: statusColor,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: isSelected ? Colors.white : Colors.transparent,
-              width: 2,
-            ),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.4),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : null,
+            fit: BoxFit.contain,
           ),
-          child: const Icon(Icons.local_shipping, color: Colors.white),
         ),
 
         if (isSelected)

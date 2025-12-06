@@ -1,0 +1,240 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import 'package:iwms_citizen_app/core/di.dart';
+import 'package:iwms_citizen_app/data/models/user_model.dart';
+import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
+import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_attendance_screen_integration.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_dashboard_models.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_home_screen.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_overview_screen.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_profile_screen.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendance_home_operator.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
+import 'package:iwms_citizen_app/router/app_router.dart';
+import 'package:go_router/go_router.dart';
+
+enum OperatorNavTab { home, overview, attendance, profile }
+
+class MainOperatorTabBar extends StatefulWidget {
+  const MainOperatorTabBar({
+    super.key,
+    this.initialTab = OperatorNavTab.home,
+  });
+
+  final OperatorNavTab initialTab;
+
+  @override
+  State<MainOperatorTabBar> createState() => _MainOperatorTabBarState();
+}
+
+class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
+  OperatorNavTab _activeTab = OperatorNavTab.home;
+  OperatorSessionDetails? _sessionDetails;
+
+  @override
+  void initState() {
+    super.initState();
+    _activeTab = widget.initialTab;
+    _loadOperatorDetails();
+  }
+
+  Future<void> _loadOperatorDetails() async {
+    final authRepository = getIt<AuthRepository>();
+    final user = await authRepository.getAuthenticatedUser();
+    if (!mounted) return;
+
+    setState(() {
+      _sessionDetails = _sessionFromUser(user);
+    });
+  }
+
+  OperatorSessionDetails _sessionFromUser(UserModel? user) {
+    final fallbackName =
+        user?.userName.trim().isNotEmpty == true ? user!.userName : "Operator";
+    final fallbackCode =
+        user?.userId.trim().isNotEmpty == true ? user!.userId : "OP-000";
+    return OperatorSessionDetails(
+      displayName: fallbackName,
+      operatorCode: fallbackCode,
+      wardLabel: "Ward 12",
+      zoneLabel: "Zone 3",
+      contactInfo: OperatorContactInfo(
+        phone: "+91 98765 43210",
+        email: "${fallbackCode.toLowerCase()}@iwms.gov.in",
+        designation: "Field Operator",
+      ),
+    );
+  }
+
+  void _setTab(OperatorNavTab tab) {
+    if (_activeTab == tab) return;
+    setState(() => _activeTab = tab);
+  }
+
+  void _logout() {
+    context.read<AuthBloc>().add(AuthLogoutRequested());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final nameFromState = context.select<AuthBloc, String?>((bloc) =>
+        bloc.state is AuthStateAuthenticated
+            ? (bloc.state as AuthStateAuthenticated).userName
+            : null);
+    final session = (_sessionDetails ??
+            OperatorSessionDetails(
+              displayName: nameFromState ?? "Operator",
+              operatorCode: "OP-000",
+            ))
+        .copyWith(displayName: nameFromState ?? _sessionDetails?.displayName);
+
+    return WillPopScope(
+      onWillPop: () async {
+        if (_activeTab != OperatorNavTab.home) {
+          _setTab(OperatorNavTab.home);
+          return false;
+        }
+        return true;
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 280),
+            switchInCurve: Curves.easeIn,
+            switchOutCurve: Curves.easeOut,
+            child: KeyedSubtree(
+              key: ValueKey<OperatorNavTab>(_activeTab),
+              child: _buildTab(session),
+            ),
+          ),
+        ),
+        bottomNavigationBar: SafeArea(
+          child: BottomNavigationBar(
+            type: BottomNavigationBarType.fixed,
+            currentIndex: _activeTab.index,
+            onTap: (index) => _setTab(OperatorNavTab.values[index]),
+            selectedItemColor: AppColors.primary,
+            unselectedItemColor: Colors.black54,
+            showUnselectedLabels: true,
+            selectedFontSize: 11,
+            unselectedFontSize: 11,
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.home_rounded),
+                label: "Home",
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.dashboard_customize_outlined),
+                label: "Overview",
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.fact_check_outlined),
+                label: "Attendance",
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.person_outline_rounded),
+                label: "Profile",
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTab(OperatorSessionDetails session) {
+    switch (_activeTab) {
+      case OperatorNavTab.home:
+        return OperatorHomeScreen(
+          operatorName: session.displayName,
+          operatorCode: session.operatorCode,
+          wardLabel: session.wardLabel,
+          zoneLabel: session.zoneLabel,
+          onScanPressed: () => context.push(AppRoutePaths.operatorQR),
+          onLogout: _logout,
+          onOpenAttendance: () => _setTab(OperatorNavTab.attendance),
+          onOpenProfile: () => _setTab(OperatorNavTab.profile),
+          onOpenHistory: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => AttendanceHistory(empId: session.operatorCode),
+              ),
+            );
+          },
+          onOpenAttendanceSummary: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => AttendancePage(
+                  operatorName: session.displayName,
+                  operatorCode: session.operatorCode,
+                ),
+              ),
+            );
+          },
+        );
+      case OperatorNavTab.overview:
+        return const OperatorOverviewScreen();
+      case OperatorNavTab.attendance:
+        return OperatorAttendanceScreenIntegration(
+          operatorName: session.displayName,
+          operatorCode: session.operatorCode,
+        );
+      case OperatorNavTab.profile:
+        return OperatorProfileScreen(
+          operatorName: session.displayName,
+          operatorCode: session.operatorCode,
+          wardLabel: session.wardLabel,
+          zoneLabel: session.zoneLabel,
+          onLogout: _logout,
+          contactInfo: session.contactInfo,
+          onEditProfile: () => _openProfileEditor(),
+        );
+    }
+  }
+
+  void _openProfileEditor() {
+    // Placeholder to hook into the actual profile edit logic/route when available.
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Opening operator profile editor...')),
+    );
+  }
+
+  String _labelForTab(OperatorNavTab tab) {
+    switch (tab) {
+      case OperatorNavTab.home:
+        return "Home";
+      case OperatorNavTab.overview:
+        return "Overview";
+      case OperatorNavTab.attendance:
+        return "Attendance";
+      case OperatorNavTab.profile:
+        return "Profile";
+    }
+  }
+
+  OperatorNavTab? _tabFromValue(dynamic value) {
+    if (value is OperatorNavTab) return value;
+    if (value is int) {
+      return OperatorNavTab.values[value];
+    }
+    if (value is String) {
+      switch (value) {
+        case "Home":
+          return OperatorNavTab.home;
+        case "Overview":
+          return OperatorNavTab.overview;
+        case "Attendance":
+          return OperatorNavTab.attendance;
+        case "Profile":
+          return OperatorNavTab.profile;
+      }
+    }
+    return null;
+  }
+}

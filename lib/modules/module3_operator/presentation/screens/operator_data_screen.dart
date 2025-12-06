@@ -1,20 +1,29 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io';
+import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter/material.dart';
+import 'package:iwms_citizen_app/core/di.dart';
+import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
+import 'package:iwms_citizen_app/router/route_observer.dart';
+import 'package:iwms_citizen_app/router/app_router.dart';
+import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:iwms_citizen_app/shared/models/collection_history.dart';
+import 'package:iwms_citizen_app/shared/services/collection_history_service.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/offline/pending_finalize_dao.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/offline/pending_finalize_record.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/bluetoothservices.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/generateunique_id.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/image_compress_service.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
-import 'package:iwms_citizen_app/router/route_observer.dart';
-import 'package:permission_handler/permission_handler.dart';
 import '../../offline/offline_sync_service.dart';
 import '../../offline/pending_record.dart';
 import '../../offline/pending_record_dao.dart';
+
+const BorderRadius _kOperatorCardRadius = BorderRadius.all(Radius.circular(18));
 
 class OperatorDataScreen extends StatefulWidget {
   final String customerId;
@@ -49,14 +58,15 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   String? activeType; // currently selected waste type
   late final OfflineSyncService _syncService;
   final PendingRecordDao _pendingDao = PendingRecordDao();
+  late final CollectionHistoryService _historyService;
 
   List<Map<String, dynamic>> wasteTypes = [];
   Map<String, Map<String, dynamic>> _wasteData = {};
   final List<Map<String, dynamic>> defaultWasteTypes = [
-  {"id": 1, "waste_type_name": "Wet"},
-  {"id": 2, "waste_type_name": "Dry"},
-  {"id": 3, "waste_type_name": "Mixed"},
-];
+    {"id": 1, "waste_type_name": "Wet"},
+    {"id": 2, "waste_type_name": "Dry"},
+    {"id": 3, "waste_type_name": "Mixed"},
+  ];
 
   @override
   void initState() {
@@ -67,12 +77,22 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     _wasteData.clear();
 
     latestWeight = "--";
+    _historyService = getIt<CollectionHistoryService>();
 
     // 🔁 Bluetooth adapter re-init
     Future.delayed(const Duration(seconds: 1), () async {
+      if (!await _ensureBluetoothPermissions()) return;
       debugPrint("♻️ Reinitializing Bluetooth adapter...");
       await FlutterBluetoothSerial.instance.cancelDiscovery();
-      await FlutterBluetoothSerial.instance.requestEnable();
+      final isEnabled =
+          await FlutterBluetoothSerial.instance.isEnabled ?? false;
+      if (!isEnabled) {
+        try {
+          await FlutterBluetoothSerial.instance.requestEnable();
+        } catch (e) {
+          debugPrint("⚠️ Unable to prompt for Bluetooth enable: $e");
+        }
+      }
       await _resetBluetooth();
       await _initBluetooth();
     });
@@ -80,7 +100,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     _syncService = OfflineSyncService(
       recordDao: _pendingDao,
       finalizeDao: _finalizeDao,
-      baseUrl: 'http://192.168.4.75:8000/api/mobile/waste',
+      baseUrl: 'http://192.168.5.92:8000/api/mobile/waste',
     )..start();
 
     _fetchWasteTypes();
@@ -195,42 +215,41 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   }
 
   // ==================== FETCH WASTE TYPES ====================
-Future<void> _fetchWasteTypes() async {
-  try {
-    final response = await http.get(
-      Uri.parse('http://192.168.4.75:8000/api/mobile/waste/get-waste-types/'),
-    );
+  Future<void> _fetchWasteTypes() async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://192.168.5.92:8000/api/mobile/waste/get-waste-types/'),
+      );
 
-    final data = json.decode(response.body);
+      final data = json.decode(response.body);
 
-    if (data['status'] == 'success' && data['data'] != null) {
-      wasteTypes = List<Map<String, dynamic>>.from(data['data']);
-    } else {
+      if (data['status'] == 'success' && data['data'] != null) {
+        wasteTypes = List<Map<String, dynamic>>.from(data['data']);
+      } else {
+        wasteTypes = defaultWasteTypes;
+      }
+    } catch (e) {
+      debugPrint('⚠ Waste type API failed, using fallback defaults');
       wasteTypes = defaultWasteTypes;
     }
-  } catch (e) {
-    debugPrint('⚠ Waste type API failed, using fallback defaults');
-    wasteTypes = defaultWasteTypes;
+
+    // Build UI base structure
+    _wasteData = {
+      for (var item in wasteTypes)
+        item['waste_type_name'].toString().toLowerCase(): {
+          'waste_type_id': item['id'],
+          'label': item['waste_type_name'],
+          'unique_id': null,
+          'image': null,
+          'weight': '--',
+          'finalWeight': null,
+          'isAdded': false,
+        }
+    };
+
+    setState(() {});
+    await _loadOfflineForScreen();
   }
-
-  // Build UI base structure
-  _wasteData = {
-    for (var item in wasteTypes)
-      item['waste_type_name'].toString().toLowerCase(): {
-        'waste_type_id': item['id'],
-        'unique_id': null,
-        'image': null,
-        'weight': '--',
-        'finalWeight': null,
-        'isAdded': false,
-      }
-  };
-
-  setState(() {});
-  await _loadOfflineForScreen();
-}
-
-
 
   // ==================== IMAGE CAPTURE ====================
   Future<File?> _captureImage(String type) async {
@@ -258,7 +277,8 @@ Future<void> _fetchWasteTypes() async {
 
   Future<void> _fetchWasteRecord(String type) async {
     try {
-      final uri = Uri.parse('http://192.168.4.75:8000/api/mobile/waste/get-latest-waste/');
+      final uri = Uri.parse(
+          'http://192.168.5.92:8000/api/mobile/waste/get-latest-waste/');
       final response = await http.post(uri, body: {
         'screen_unique_id': screenUniqueId,
         'customer_id': widget.customerId,
@@ -324,8 +344,8 @@ Future<void> _fetchWasteTypes() async {
       // ------------------------------------------------------------
       final uri = Uri.parse(
         isUpdate
-            ? 'http://192.168.4.75:8000/api/mobile/waste/update-waste-sub/'
-            : 'http://192.168.4.75:8000/api/mobile/waste/insert-waste-sub/',
+            ? 'http://192.168.5.92:8000/api/mobile/waste/update-waste-sub/'
+            : 'http://192.168.5.92:8000/api/mobile/waste/insert-waste-sub/',
       );
 
       debugPrint(
@@ -490,9 +510,10 @@ Future<void> _fetchWasteTypes() async {
   Future<void> _submitForm() async {
     setState(() => _isSubmitting = true);
 
-    try {
+    final totalWeight = _calculateTotalWeight();
+    final summary = _buildSummarySnapshot();
 
-      final totalWeight = _calculateTotalWeight();
+    try {
       debugPrint('🔎 total waste before submit: $totalWeight');
 
       if (totalWeight <= 0) {
@@ -501,7 +522,8 @@ Future<void> _fetchWasteTypes() async {
         return;
       }
 
-      final uri = Uri.parse('http://192.168.4.75:8000/api/mobile/waste/finalize-waste/');
+      final uri = Uri.parse(
+          'http://192.168.5.92:8000/api/mobile/waste/finalize-waste/');
 
       final request = http.MultipartRequest('POST', uri)
         ..fields['screen_unique_id'] = screenUniqueId
@@ -514,45 +536,40 @@ Future<void> _fetchWasteTypes() async {
           json.decode((await http.Response.fromStream(response)).body);
 
       if (result['status'] == 'success') {
+        await _recordCollectionHistory(totalWeight);
+        await _showSuccessSheet(totalWeight, summary);
         _resetUI();
         await _fetchWasteTypes();
-        _showDialog("Success", "Record submitted successfully");
       } else {
         throw Exception(result['message']);
       }
-    }catch (e) {
-  debugPrint("⚠️ Finalize failed, storing offline: $e");
+    } catch (e) {
+      debugPrint("⚠️ Finalize failed, storing offline: $e");
 
-  final pendingFinalize = PendingFinalizeRecord(
-    screenId: screenUniqueId,
-    customerId: widget.customerId,
-    totalWeight: _calculateTotalWeight(),
-    entryType: "app",
-  );
+      final pendingFinalize = PendingFinalizeRecord(
+        screenId: screenUniqueId,
+        customerId: widget.customerId,
+        totalWeight: _calculateTotalWeight(),
+        entryType: "app",
+      );
 
-  await _finalizeDao.insert(pendingFinalize);
+      await _finalizeDao.insert(pendingFinalize);
 
-  // Prevent crash if internet is OFF
-  try {
-    if (await _syncService.hasInternet()) {
-      await _syncService.syncAll();
-    }
-  } catch (err) {
-    debugPrint("⚠️ Sync attempt failed: $err");
-  }
+      // Prevent crash if internet is OFF
+      try {
+        if (await _syncService.hasInternet()) {
+          await _syncService.syncAll();
+        }
+      } catch (err) {
+        debugPrint("⚠️ Sync attempt failed: $err");
+      }
 
-  // Reset UI like online mode
-  _resetUI();
-  await _fetchWasteTypes();
-
-  _showDialog(
-    "Offline Mode",
-    "Finalize request saved offline. Will sync automatically when you reconnect.",
-  );
-}
-
-    
-     finally {
+      // Reset UI like online mode
+      await _recordCollectionHistory(totalWeight);
+      await _showSuccessSheet(totalWeight, summary, offline: true);
+      _resetUI();
+      await _fetchWasteTypes();
+    } finally {
       setState(() => _isSubmitting = false);
     }
   }
@@ -564,6 +581,164 @@ Future<void> _fetchWasteTypes() async {
           0;
       return sum + w;
     });
+  }
+
+  Future<void> _recordCollectionHistory(double totalWeight) async {
+    final sections = _wasteData.entries
+        .map((entry) {
+          final resolvedWeight = _weightFromEntry(entry.value);
+          if (resolvedWeight <= 0) return null;
+          final label =
+              entry.value['label']?.toString() ?? entry.key.toUpperCase();
+          final image = entry.value['image'] as File?;
+          return CollectionHistorySection(
+            type: label,
+            weight: resolvedWeight.toStringAsFixed(2),
+            imagePath: image?.path,
+          );
+        })
+        .whereType<CollectionHistorySection>()
+        .toList();
+
+    if (sections.isEmpty) return;
+
+    final entry = CollectionHistoryEntry(
+      customerId: widget.customerId,
+      customerName: widget.customerName,
+      collectedAt: DateTime.now(),
+      sections: sections,
+      totalWeight: totalWeight,
+    );
+
+    await _historyService.addEntry(entry);
+  }
+
+  double _weightFromEntry(Map<String, dynamic> entry) {
+    final source = entry['finalWeight'] ?? entry['weight'];
+    if (source == null) return 0;
+    return double.tryParse(source.toString()) ?? 0;
+  }
+
+  Map<String, double> _buildSummarySnapshot() {
+    final Map<String, double> totals = {'wet': 0, 'dry': 0, 'mixed': 0};
+    _wasteData.forEach((key, value) {
+      final weight = _weightFromEntry(value);
+      if (weight <= 0) return;
+      if (key.contains('wet')) {
+        totals['wet'] = (totals['wet'] ?? 0) + weight;
+      } else if (key.contains('dry')) {
+        totals['dry'] = (totals['dry'] ?? 0) + weight;
+      } else {
+        totals['mixed'] = (totals['mixed'] ?? 0) + weight;
+      }
+    });
+    return totals;
+  }
+
+  Future<void> _showSuccessSheet(
+    double totalWeight,
+    Map<String, double> summary, {
+    bool offline = false,
+  }) async {
+    if (!mounted) return;
+    final theme = Theme.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      isDismissible: true,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    offline ? Icons.cloud_off : Icons.check_circle,
+                    color: offline ? Colors.orange : Colors.green,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    offline ? 'Saved offline' : 'Collection recorded',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Total: ${totalWeight.toStringAsFixed(2)} kg',
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                children: [
+                  _pill('Wet', summary['wet'] ?? 0, Colors.blue),
+                  _pill('Dry', summary['dry'] ?? 0, Colors.green),
+                  _pill('Mixed', summary['mixed'] ?? 0, Colors.orange),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green.shade700,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onPressed: () {
+                        Navigator.of(sheetContext).pop();
+                        context.go(AppRoutePaths.operatorHome);
+                      },
+                      icon: const Icon(Icons.home),
+                      label: const Text('Back to home'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onPressed: () {
+                        Navigator.of(sheetContext).pop();
+                      },
+                      child: const Text('Close'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _pill(String label, double value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Text(
+        '$label ${value.toStringAsFixed(2)} kg',
+        style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+    );
   }
 
   // ==================== DIALOG ====================
@@ -585,11 +760,10 @@ Future<void> _fetchWasteTypes() async {
 
   // ==================== UI HELPERS ====================
   Widget _buildCustomerInfo() => Card(
-        color: Colors.white,
-        elevation: 2,
+        color: AppColors.surface,
+        elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4),
-          side: BorderSide(color: Colors.grey.withOpacity(0.3)),
+          borderRadius: _kOperatorCardRadius,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -602,8 +776,20 @@ Future<void> _fetchWasteTypes() async {
       );
 
   Widget _infoTile(String label, String value) => ListTile(
-        title: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(value, style: const TextStyle(fontSize: 16)),
+        title: Text(
+          label,
+          style: AppTextStyles.bodyMedium.copyWith(
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        subtitle: Text(
+          value,
+          style: AppTextStyles.bodyMedium.copyWith(
+            fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary,
+          ),
+        ),
       );
 
   Widget _buildWasteSection(String type, String displayName) {
@@ -616,12 +802,12 @@ Future<void> _fetchWasteTypes() async {
             : item['weight'];
 
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 10),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: _kOperatorCardRadius,
         side: BorderSide(
-          color: (type == activeType) ? Colors.blueAccent : Colors.black12,
-          width: (type == activeType) ? 2 : 1,
+          color: (type == activeType) ? AppColors.primary : Colors.black12,
+          width: (type == activeType) ? 1.5 : 1,
         ),
       ),
       child: Padding(
@@ -629,10 +815,11 @@ Future<void> _fetchWasteTypes() async {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(displayName,
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
+            Text(
+              displayName,
+              style: AppTextStyles.heading2,
+            ),
+            const SizedBox(height: 8),
 
             // IMAGE
             if (image != null)
@@ -648,58 +835,81 @@ Future<void> _fetchWasteTypes() async {
               Container(
                 height: 180,
                 width: double.infinity,
-                color: Colors.grey[200],
+                decoration: BoxDecoration(
+                  color: AppColors.accentLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: const Icon(Icons.camera_alt_outlined,
-                    size: 50, color: Colors.grey),
+                    size: 48, color: Colors.grey),
               ),
 
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
 
             Text(
               "Weight: ${displayWeight == '--' ? '--' : '$displayWeight kg'}",
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              style: AppTextStyles.bodyMedium.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
             ),
 
             const SizedBox(height: 10),
 
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    final picked =
-                        await _picker.pickImage(source: ImageSource.camera);
-                    if (picked == null) return;
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final picked =
+                          await _picker.pickImage(source: ImageSource.camera);
+                      if (picked == null) return;
 
-                    final original = File(picked.path);
-                    final compressed =
-                        await ImageCompressService.compress(original);
+                      final original = File(picked.path);
+                      final compressed =
+                          await ImageCompressService.compress(original);
 
-                    setState(() {
-                      final updated = Map<String, dynamic>.from(item);
-                      updated['image'] = compressed;
-                      updated['weight'] = latestWeight;
+                      setState(() {
+                        final updated = Map<String, dynamic>.from(item);
+                        updated['image'] = compressed;
+                        updated['weight'] = latestWeight;
 
-                      _wasteData = {
-                        ..._wasteData,
-                        type: updated,
-                      };
+                        _wasteData = {
+                          ..._wasteData,
+                          type: updated,
+                        };
 
-                      activeType = type;
-                    });
-                  },
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text("Capture"),
-                ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isAdded
-                        ? Colors.orange.shade600
-                        : Colors.green.shade700,
+                        activeType = type;
+                      });
+                    },
+                    icon: const Icon(Icons.camera_alt, size: 18),
+                    label: Text(
+                      "Capture",
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                  onPressed: () => _handleAdd(type),
-                  icon: Icon(isAdded ? Icons.refresh : Icons.add),
-                  label: Text(isAdded ? "Update" : "Add"),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          isAdded ? Colors.orange.shade600 : AppColors.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: () => _handleAdd(type),
+                    icon: Icon(
+                      isAdded ? Icons.refresh : Icons.add,
+                      size: 18,
+                    ),
+                    label: Text(
+                      isAdded ? "Update" : "Add",
+                      style: AppTextStyles.labelLarge.copyWith(
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -730,9 +940,26 @@ Future<void> _fetchWasteTypes() async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: const Color.fromRGBO(0, 61, 125, 0.8),
-        title: const Text("Customer Details"),
+        backgroundColor: AppColors.primary,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            // Prefer router navigation back to operator home tabbar.
+            final navigator = Navigator.of(context);
+            if (navigator.canPop()) {
+              navigator.pop();
+            } else {
+              // Fallback to route if opened fresh.
+              context.go(AppRoutePaths.operatorHome);
+            }
+          },
+        ),
+        title: Text(
+          "Customer Details",
+          style: AppTextStyles.heading2.copyWith(color: Colors.white),
+        ),
       ),
       body: wasteTypes.isEmpty
           ? const Center(child: CircularProgressIndicator())
@@ -740,15 +967,13 @@ Future<void> _fetchWasteTypes() async {
               children: [
                 Container(
                   width: double.infinity,
-                  color: Colors.blueGrey.shade50,
+                  color: AppColors.accentLight,
                   padding:
                       const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                   child: Text(
                     "📟 Live Weight: ${latestWeight == '--' ? '--' : '$latestWeight kg'}",
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                    style: AppTextStyles.heading2.copyWith(
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ),
@@ -758,7 +983,7 @@ Future<void> _fetchWasteTypes() async {
                     child: Column(
                       children: [
                         _buildCustomerInfo(),
-                        const SizedBox(height: 15),
+                        const SizedBox(height: 12),
                         ...wasteTypes.map((w) {
                           final type =
                               w['waste_type_name'].toString().toLowerCase();
@@ -769,7 +994,7 @@ Future<void> _fetchWasteTypes() async {
                             child: _buildWasteSection(type, name),
                           );
                         }),
-                        const SizedBox(height: 25),
+                        const SizedBox(height: 20),
                         _isSubmitting
                             ? const CircularProgressIndicator()
                             : ElevatedButton(
@@ -780,10 +1005,11 @@ Future<void> _fetchWasteTypes() async {
                                       horizontal: 40, vertical: 12),
                                 ),
                                 onPressed: _submitForm,
-                                child: const Text(
+                                child: Text(
                                   'Submit',
-                                  style: TextStyle(
-                                      color: Colors.white, fontSize: 16),
+                                  style: AppTextStyles.labelLarge.copyWith(
+                                    fontSize: 14,
+                                  ),
                                 ),
                               ),
                       ],
@@ -796,6 +1022,27 @@ Future<void> _fetchWasteTypes() async {
   }
 
   // ==================== BLUETOOTH INIT ====================
+
+  Future<bool> _ensureBluetoothPermissions() async {
+    final statuses = await [
+      Permission.bluetooth,
+      Permission.bluetoothConnect,
+      Permission.bluetoothScan,
+      Permission.locationWhenInUse,
+    ].request();
+
+    final granted = statuses.values.every((status) => status.isGranted);
+    if (!granted && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Bluetooth permissions are required to capture weight.'),
+        ),
+      );
+    }
+    return granted;
+  }
+
 //   Future<void> _initBluetooth() async {
 //     if (connected) return;
 
@@ -870,12 +1117,7 @@ Future<void> _fetchWasteTypes() async {
   Future<void> _initBluetooth() async {
     if (connected) return;
 
-    await [
-      Permission.bluetooth,
-      Permission.bluetoothConnect,
-      Permission.bluetoothScan,
-      Permission.locationWhenInUse,
-    ].request();
+    if (!await _ensureBluetoothPermissions()) return;
 
     final devices = await FlutterBluetoothSerial.instance.getBondedDevices();
     if (devices.isEmpty) {
