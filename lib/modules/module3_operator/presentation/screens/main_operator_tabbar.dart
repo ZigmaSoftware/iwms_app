@@ -58,9 +58,12 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
         user?.userName.trim().isNotEmpty == true ? user!.userName : "Operator";
     final fallbackCode =
         user?.userId.trim().isNotEmpty == true ? user!.userId : "OP-000";
+       final fallbackemp_id =
+        user?.emp_id?.trim().isNotEmpty == true ? user!.emp_id : "000";  
     return OperatorSessionDetails(
       displayName: fallbackName,
       operatorCode: fallbackCode,
+      operatoremp_id:fallbackemp_id!,
       wardLabel: "Ward 12",
       zoneLabel: "Zone 3",
       contactInfo: OperatorContactInfo(
@@ -86,10 +89,15 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
         bloc.state is AuthStateAuthenticated
             ? (bloc.state as AuthStateAuthenticated).userName
             : null);
+             final emp_idFromState = context.select<AuthBloc, String?>((bloc) =>
+        bloc.state is AuthStateAuthenticated
+            ? (bloc.state as AuthStateAuthenticated).emp_id
+            : null);
     final session = (_sessionDetails ??
             OperatorSessionDetails(
               displayName: nameFromState ?? "Operator",
               operatorCode: "OP-000",
+              operatoremp_id: emp_idFromState!
             ))
         .copyWith(displayName: nameFromState ?? _sessionDetails?.displayName);
 
@@ -154,6 +162,7 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
         return OperatorHomeScreen(
           operatorName: session.displayName,
           operatorCode: session.operatorCode,
+          emp_id: session.operatoremp_id,
           wardLabel: session.wardLabel,
           zoneLabel: session.zoneLabel,
           onScanPressed: () => context.push(AppRoutePaths.operatorQR),
@@ -163,7 +172,7 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
           onOpenHistory: () {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => AttendanceHistory(empId: session.operatorCode),
+                builder: (_) => AttendanceHistory(empId: session.operatoremp_id),
               ),
             );
           },
@@ -187,6 +196,7 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
         );
       case OperatorNavTab.profile:
         return OperatorProfileScreen(
+          emp_id: session.operatoremp_id,
           operatorName: session.displayName,
           operatorCode: session.operatorCode,
           wardLabel: session.wardLabel,

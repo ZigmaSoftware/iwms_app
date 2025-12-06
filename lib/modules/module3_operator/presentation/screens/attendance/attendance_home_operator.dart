@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:animated_neumorphic/animated_neumorphic.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart'; // Import geolocator package
 import 'package:http/http.dart' as http;
@@ -25,11 +27,12 @@ class AttendancePage extends StatefulWidget {
     super.key,
     this.operatorName = '',
     this.operatorCode = '',
+    this.emp_id='',
   });
 
   final String operatorName;
   final String operatorCode;
-
+  final String emp_id;
   @override
   State<AttendancePage> createState() => _AttendancePageState();
 }
@@ -64,98 +67,8 @@ class _AttendancePageState extends State<AttendancePage> {
     return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
   }
 
-  void updateGreeting() {
-    setState(() {
-      greetingMessage = getDynamicGreeting();
-    });
-  }
-  // Future<void> fetchAndSetImage() async {
-  //   try {
-  //     final userProvider = Provider.of<UserProvider>(context, listen: false);
-  //     String empId = userProvider.empid; // Get the empid
-  //     print("Fetching image for empId: $empId");
 
-  //     final fetchedImageName = await fetchImageName(empId); // Fetch the image name
-  //     print("Fetched image name from API: $fetchedImageName");
 
-  //     setState(() {
-  //       imageName = fetchedImageName;
-  //       isLoading = false;
-  //     });
-  //   } catch (e) {
-  //     setState(() {
-  //       isLoading = false;
-  //     });
-  //     // print("Error occurred: $e");
-  //     // ScaffoldMessenger.of(context).showSnackBar(
-  //     //   SnackBar(content: Text("Error fetching image: $e")),
-  //     // );
-  //   }
-  // }
-  String getDynamicGreeting() {
-    var hour = DateTime.now().hour;
-    var weekday = DateTime.now().weekday; // 1 = Monday, 7 = Sunday
-
-    // Define messages for each day of the week
-    Map<int, List<String>> dailyMessages = {
-      1: [
-        // Monday
-        "Start the week strong!",
-        "New week, new opportunities!",
-        "Set goals and take action!"
-      ],
-      2: [
-        // Tuesday
-        "Keep up the momentum!",
-        "Small steps lead to big success!",
-        "Stay focused and productive!"
-      ],
-      3: [
-        // Wednesday
-        "Halfway through—keep going!",
-        "Every challenge is an opportunity!",
-        "Success comes with persistence!"
-      ],
-      4: [
-        // Thursday
-        "You're almost there!",
-        "Stay determined, results are near!",
-        "Refine your efforts, success is close!"
-      ],
-      5: [
-        // Friday
-        "Finish strong, weekend ahead!",
-        "Keep going, success follows effort!",
-        "Push through and celebrate progress!"
-      ],
-      6: [
-        // Saturday
-        "Relax and recharge!",
-        "Balance is key—enjoy today!",
-        "Learn and grow every day!"
-      ],
-      7: [
-        // Sunday
-        "Reflect and reset for success!",
-        "Take time for yourself!",
-        "Recharge for a productive week!"
-      ]
-    };
-
-    // Get a random message from today's set
-    String dailyMessage = (dailyMessages[weekday]!..shuffle()).first;
-
-    // Time-based Greetings
-    if (hour >= 5 && hour < 12) {
-      return "Good Morning! $dailyMessage";
-    } else if (hour >= 12 && hour < 17) {
-      return "Good Afternoon! $dailyMessage";
-    } else if (hour >= 17 && hour < 21) {
-      return "Good Evening! $dailyMessage";
-    } else {
-      return "Good Night! $dailyMessage";
-    }
-  }
 
   @override
   void initState() {
@@ -179,7 +92,7 @@ class _AttendancePageState extends State<AttendancePage> {
     _timer = Timer.periodic(const Duration(minutes: 1), (Timer timer) {
       // _fetchAttendanceData();
     });
-    greetingMessage = getDynamicGreeting();
+   
     _pendingSync = [
       {
         "type": "Check In",
@@ -373,9 +286,14 @@ class _AttendancePageState extends State<AttendancePage> {
 
   @override
   Widget build(BuildContext context) {
-    final userName =
-        widget.operatorName.isNotEmpty ? widget.operatorName : "Operator";
-    final empid = widget.operatorCode;
+      final nameFromState = context.select<AuthBloc, String?>((bloc) =>
+        bloc.state is AuthStateAuthenticated
+            ? (bloc.state as AuthStateAuthenticated).userName
+            : null);
+             final emp_idFromState = context.select<AuthBloc, String?>((bloc) =>
+        bloc.state is AuthStateAuthenticated
+            ? (bloc.state as AuthStateAuthenticated).emp_id
+            : null);
 
     return SafeArea(
       child: Scaffold(
@@ -425,36 +343,10 @@ class _AttendancePageState extends State<AttendancePage> {
                   ],
                 ),
               ),
-
+              // Text(emp_idFromState!),
               SizedBox(height: 15),
 
-              // ===========================
-              //           KPI ROW
-              // ===========================
-              // Container(
-              //   margin: EdgeInsets.symmetric(horizontal: 20),
-              //   padding: EdgeInsets.all(18),
-              //   decoration: BoxDecoration(
-              //     color: Colors.white,
-              //     borderRadius: BorderRadius.circular(22),
-              //     boxShadow: [
-              //       BoxShadow(
-              //         blurRadius: 8,
-              //         color: Colors.black12,
-              //         offset: Offset(0, 3),
-              //       )
-              //     ],
-              //   ),
 
-              //   child: Row(
-              //     mainAxisAlignment: MainAxisAlignment.spaceAround,
-              //     children: [
-              //       _kpiItem("20 Days", "Presence"),
-              //       _kpiItem("3 Times", "Leaves"),
-              //       _kpiItem("2 Times", "Permission"),
-              //     ],
-              //   ),
-              // ),
               Container(
                 margin: EdgeInsets.symmetric(horizontal: 20),
                 padding: EdgeInsets.symmetric(vertical: 22, horizontal: 16),
@@ -540,14 +432,14 @@ class _AttendancePageState extends State<AttendancePage> {
                   _quickAction(Icons.history, "History", onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => AttendanceHistory(empId: empid),
+                        builder: (_) => AttendanceHistory(empId: emp_idFromState!),
                       ),
                     );
                   }),
                   _quickAction(Icons.summarize_rounded, "Summary", onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => AttendanceHistory(empId: empid),
+                        builder: (_) => AttendanceHistory(empId: emp_idFromState!),
                       ),
                     );
                   }),
@@ -565,8 +457,8 @@ class _AttendancePageState extends State<AttendancePage> {
                     await Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => CameraScreen(
-                          employeeName: userName,
-                          employeeId: empid,
+                          employeeName: nameFromState!,
+                          employeeId: emp_idFromState!,
                         ),
                       ),
                     );
@@ -610,77 +502,7 @@ class _AttendancePageState extends State<AttendancePage> {
                 ),
               ),
 
-              // ===========================
-              //   PUNCH ATTENDANCE BUTTON
-//           GestureDetector(
-//   onTapDown: (_) => setState(() => _punchPressed = true),
-//   onTapUp: (_) => setState(() => _punchPressed = false),
-//   onTapCancel: () => setState(() => _punchPressed = false),
-//   onTap: () async {
-//     final result = await Navigator.push(
-//       context,
-//       MaterialPageRoute(
-//         builder: (context) => CameraScreen(
-//           employeeName: userName,
-//           employeeId: empid,
-//         ),
-//       ),
-//     );
-//   },
-
-//   child: AnimatedScale(
-//     duration: Duration(milliseconds: 130),
-//     scale: _punchPressed ? 0.93 : 1.0,
-//     child: Container(
-//       height: 150,
-//       width: 150,
-//       decoration: BoxDecoration(
-//         shape: BoxShape.circle,
-//         gradient: LinearGradient(
-//           colors: [Color(0xFF1B5E20), Color(0xFF66BB6A)],
-//           begin: Alignment.topLeft,
-//           end: Alignment.bottomRight,
-//         ),
-//         boxShadow: [
-//           BoxShadow(
-//             color: Colors.green.withOpacity(0.3),
-//             blurRadius: 16,
-//             spreadRadius: 2,
-//             offset: Offset(0, 6),
-//           ),
-//         ],
-//       ),
-
-//       child: Container(
-//         margin: EdgeInsets.all(6),
-//         decoration: BoxDecoration(
-//           shape: BoxShape.circle,
-//           color: Colors.white,
-//         ),
-//         child: Column(
-//           mainAxisAlignment: MainAxisAlignment.center,
-//           children: [
-//             Icon(Icons.fingerprint,
-//                 size: 55,
-//                 color: Colors.green.shade700),
-//             SizedBox(height: 8),
-//             Text(
-//               "Punch\nAttendance",
-//               textAlign: TextAlign.center,
-//               style: TextStyle(
-//                 fontSize: 15,
-//                 fontWeight: FontWeight.w800,
-//                 color: Colors.green.shade900,
-//               ),
-//             ),
-//           ],
-//         ),
-//       ),
-//     ),
-//   ),
-// ),
-
-              // SizedBox(height: 40),
+ 
 
               SizedBox(height: 25),
 

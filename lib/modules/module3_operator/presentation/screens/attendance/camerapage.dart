@@ -256,7 +256,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://125.17.238.158:5000/recognize'),
+        Uri.parse('http://10.64.151.226:8000/api/mobile/recognize/'),
       );
       request.fields['emp_id'] = widget.employeeId;
       request.fields['name'] = widget.employeeName;
@@ -318,6 +318,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       });
     }
   }
+
 
   // Future<void> _sendDataToBackend() async {
   //   setState(() {

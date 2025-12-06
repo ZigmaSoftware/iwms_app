@@ -24,6 +24,7 @@ class AuthRepository {
   static const String _roleKey = 'user_role';
   static const String _nameKey = 'user_name';
   static const String _tokenKey = 'auth_token';
+  static const String _emp_idKey = 'emp_id';
 
   AuthRepository(this._dio, this._prefs);
 
@@ -168,6 +169,7 @@ Future<UserModel> loginCitizen({
     final userId = _prefs.getString(_userKey);
     final role = _prefs.getString(_roleKey);
     final userName = _prefs.getString(_nameKey);
+    final emp_id = _prefs.getString(_emp_idKey);
 
     if (userId != null && role != null && userName != null) {
       final token = _prefs.getString(_tokenKey);
@@ -176,6 +178,7 @@ Future<UserModel> loginCitizen({
         userName: userName,
         role: role,
         authToken: token,
+        emp_id: emp_id
       );
     }
     return null;
@@ -184,6 +187,7 @@ Future<UserModel> loginCitizen({
   Future<void> logout() async {
     await _prefs.remove(_userKey);
     await _prefs.remove(_roleKey);
+    await _prefs.remove(_emp_idKey);
     await _prefs.remove(_nameKey);
     await _prefs.remove(_tokenKey);
   }
@@ -196,6 +200,7 @@ Future<UserModel> loginCitizen({
     await _prefs.setString(_userKey, user.userId);
     await _prefs.setString(_roleKey, user.role);
     await _prefs.setString(_nameKey, user.userName);
+    await _prefs.setString(_emp_idKey, user.emp_id!);
 
     if (user.authToken != null && user.authToken!.isNotEmpty) {
       await _prefs.setString(_tokenKey, user.authToken!);

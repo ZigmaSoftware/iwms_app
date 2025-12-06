@@ -14,6 +14,7 @@ class OperatorHomeScreen extends StatelessWidget {
     super.key,
     required this.operatorName,
     required this.operatorCode,
+    required this.emp_id,
     required this.wardLabel,
     required this.zoneLabel,
     required this.onScanPressed,
@@ -30,6 +31,7 @@ class OperatorHomeScreen extends StatelessWidget {
   final String operatorName;
   final String operatorCode;
   final String wardLabel;
+   final String emp_id;
   final String zoneLabel;
   final VoidCallback onScanPressed;
   final VoidCallback onLogout;
@@ -66,6 +68,7 @@ class OperatorHomeScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             OperatorHeader(
+              emp_id:emp_id ,
               name: operatorName,
               badge: operatorCode,
               ward: wardLabel,

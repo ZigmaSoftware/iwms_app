@@ -57,6 +57,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(AuthStateAuthenticated(
         userName: user.userName,
         role: user.role.toLowerCase(),
+        emp_id:user.emp_id
       ));
     } catch (e) {
       emit(AuthStateFailure(message: e.toString()));
