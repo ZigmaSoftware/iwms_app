@@ -18,6 +18,7 @@ import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/shared/widgets/tracking_view_shell.dart';
 import '../../route/driver_route_screen.dart';
+import 'package:iwms_citizen_app/core/ors_service.dart';
 
 const Color _driverPrimary = Color(0xFF1B5E20);
 const Color _driverAccent = Color(0xFF66BB6A);
@@ -232,8 +233,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
                 child: Column(
                   children: [
                     _MiniHeader(
-                      driverName: selectedVehicle?.registrationNumber ??
-                          'Driver',
+                      driverName:
+                          selectedVehicle?.registrationNumber ?? 'Driver',
                       onNotification: () {},
                     ),
                     Expanded(
@@ -295,9 +296,11 @@ class _DriverHomePageState extends State<DriverHomePage> {
     });
     try {
       final assignmentsUri = Uri.parse(ApiConfig.assignments);
-      final resp = await http.get(assignmentsUri).timeout(const Duration(seconds: 12));
+      final resp =
+          await http.get(assignmentsUri).timeout(const Duration(seconds: 12));
       if (resp.statusCode == 200) {
-        final decodedAssignments = _decodeCustomerList(resp.body, fromAssignments: true);
+        final decodedAssignments =
+            _decodeCustomerList(resp.body, fromAssignments: true);
         if (decodedAssignments.isNotEmpty) {
           setState(() {
             _customers = decodedAssignments;
@@ -308,7 +311,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
       }
 
       // Fallback to raw customer list when no assignments are present
-      final customersResp = await http.get(Uri.parse(ApiConfig.customerList)).timeout(const Duration(seconds: 12));
+      final customersResp = await http
+          .get(Uri.parse(ApiConfig.customerList))
+          .timeout(const Duration(seconds: 12));
       if (customersResp.statusCode == 200) {
         final data = customersResp.body;
         final decoded = _decodeCustomerList(data);
@@ -319,7 +324,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
       } else {
         setState(() {
           _loadingCustomers = false;
-          _customerError = 'Failed to load customers (${customersResp.statusCode})';
+          _customerError =
+              'Failed to load customers (${customersResp.statusCode})';
         });
       }
     } catch (e) {
@@ -340,23 +346,32 @@ class _DriverHomePageState extends State<DriverHomePage> {
     return double.tryParse(raw);
   }
 
-  List<_DriverCustomerStop> _decodeCustomerList(String body, {bool fromAssignments = false}) {
+  List<_DriverCustomerStop> _decodeCustomerList(String body,
+      {bool fromAssignments = false}) {
     final List<_DriverCustomerStop> out = [];
     try {
       final decoded = jsonDecode(body);
-      final list = decoded is List ? decoded : (decoded is Map && decoded['results'] is List ? decoded['results'] : []);
+      final list = decoded is List
+          ? decoded
+          : (decoded is Map && decoded['results'] is List
+              ? decoded['results']
+              : []);
       if (list is List) {
         for (final entry in list) {
           if (entry is! Map<String, dynamic>) continue;
           final map = Map<String, dynamic>.from(entry);
-          final id = map['unique_id']?.toString() ?? map['customer_id']?.toString() ?? '';
+          final id = map['unique_id']?.toString() ??
+              map['customer_id']?.toString() ??
+              '';
           final name = map['customer_name']?.toString() ??
               map['ward_name']?.toString() ??
               map['driver_name']?.toString() ??
               'Unknown';
 
-          final latRaw = fromAssignments ? map['customer_latitude'] : map['latitude'];
-          final lonRaw = fromAssignments ? map['customer_longitude'] : map['longitude'];
+          final latRaw =
+              fromAssignments ? map['customer_latitude'] : map['latitude'];
+          final lonRaw =
+              fromAssignments ? map['customer_longitude'] : map['longitude'];
           final lat = _parseCoordinate(latRaw);
           final lon = _parseCoordinate(lonRaw);
           if (id.isEmpty || lat == null || lon == null) continue;
@@ -475,7 +490,6 @@ class _DriverHomePageState extends State<DriverHomePage> {
       }).toList();
     });
   }
-
 }
 
 class _MiniHeader extends StatelessWidget {
@@ -894,12 +908,40 @@ class _DriverCustomerStop {
 }
 
 class _HomeTabState extends State<_HomeTab> {
-  late List<_DriverCustomerStop> _customers;
+  List<LatLng> _orsRoute = [];
+  double _driverBearing = 0.0;
+
+  List<_DriverCustomerStop> _customers = [];
 
   @override
   void initState() {
     super.initState();
     _customers = widget.customers;
+    _computeRoute();
+  }
+
+  Future<void> _computeRoute() async {
+    if (_customers.isEmpty) {
+      print("No customers → skipping ORS");
+      return;
+    }
+
+    final nextStop = _customers.first.location;
+
+    final result = await ORSService.fetchRoute(
+      widget.driverLocation,
+      nextStop,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _orsRoute = result;
+      _driverBearing = ORSService.calculateBearing(
+        widget.driverLocation,
+        nextStop,
+      );
+    });
   }
 
   @override
@@ -907,6 +949,7 @@ class _HomeTabState extends State<_HomeTab> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.customers != widget.customers) {
       _customers = List<_DriverCustomerStop>.from(widget.customers);
+      _computeRoute();
     }
   }
 
@@ -959,11 +1002,21 @@ class _HomeTabState extends State<_HomeTab> {
                     ),
                     PolylineLayer(
                       polylines: [
-                        Polyline(
-                          points: routeLinePoints,
-                          color: _driverPrimary.withOpacity(0.6),
-                          strokeWidth: 3.5,
-                        ),
+                        if (_orsRoute.isNotEmpty)
+                          Polyline(
+                            points: _orsRoute,
+                            color: Colors.blueAccent,
+                            strokeWidth: 4.5,
+                          )
+                        else
+                          Polyline(
+                            points: [
+                              widget.driverLocation,
+                              ..._customers.map((c) => c.location)
+                            ],
+                            color: _driverPrimary.withOpacity(0.6),
+                            strokeWidth: 3.5,
+                          ),
                       ],
                     ),
                     if (_customers.isNotEmpty)
@@ -973,7 +1026,11 @@ class _HomeTabState extends State<_HomeTab> {
                             width: 42,
                             height: 42,
                             point: widget.driverLocation,
-                            child: const _DriverMarker(isActive: true),
+                            child: _DriverMarker(
+                              isActive: true,
+                              rotation:
+                                  _driverBearing, // arrow rotates toward next stop
+                            ),
                           ),
                           ..._customers.map(
                             (c) => Marker(
@@ -1031,8 +1088,8 @@ class _HomeTabState extends State<_HomeTab> {
                                   child: Text('No customers assigned'),
                                 )
                               : ListView.separated(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16),
                                   scrollDirection: Axis.horizontal,
                                   itemBuilder: (context, index) {
                                     final customer = _customers[index];
@@ -1042,7 +1099,8 @@ class _HomeTabState extends State<_HomeTab> {
                                       child: Card(
                                         elevation: 5,
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(16),
+                                          borderRadius:
+                                              BorderRadius.circular(16),
                                         ),
                                         child: Padding(
                                           padding: const EdgeInsets.all(10),
@@ -1059,36 +1117,39 @@ class _HomeTabState extends State<_HomeTab> {
                                                     child: Text(
                                                       customer.name[0]
                                                           .toUpperCase(),
-                                                      style:
-                                                          TextStyle(color: color),
+                                                      style: TextStyle(
+                                                          color: color),
                                                     ),
                                                   ),
                                                   const SizedBox(width: 8),
                                                   Expanded(
                                                     child: Column(
                                                       crossAxisAlignment:
-                                                          CrossAxisAlignment.start,
+                                                          CrossAxisAlignment
+                                                              .start,
                                                       children: [
                                                         Text(
                                                           customer.name,
-                                                          style: const TextStyle(
+                                                          style:
+                                                              const TextStyle(
                                                             fontWeight:
                                                                 FontWeight.w800,
                                                           ),
                                                           maxLines: 1,
-                                                          overflow:
-                                                              TextOverflow.ellipsis,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
                                                         ),
                                                         Text(
                                                           customer.address,
                                                           style: TextStyle(
                                                             color: Colors.black
-                                                                .withOpacity(0.6),
+                                                                .withOpacity(
+                                                                    0.6),
                                                             fontSize: 11,
                                                           ),
                                                           maxLines: 1,
-                                                          overflow:
-                                                              TextOverflow.ellipsis,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
                                                         ),
                                                       ],
                                                     ),
@@ -1099,8 +1160,8 @@ class _HomeTabState extends State<_HomeTab> {
                                                         horizontal: 8,
                                                         vertical: 4),
                                                     decoration: BoxDecoration(
-                                                      color:
-                                                          color.withOpacity(0.12),
+                                                      color: color
+                                                          .withOpacity(0.12),
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                               10),
@@ -1109,7 +1170,8 @@ class _HomeTabState extends State<_HomeTab> {
                                                       customer.status.name,
                                                       style: TextStyle(
                                                         color: color,
-                                                        fontWeight: FontWeight.w700,
+                                                        fontWeight:
+                                                            FontWeight.w700,
                                                         fontSize: 10,
                                                       ),
                                                     ),
@@ -1123,12 +1185,13 @@ class _HomeTabState extends State<_HomeTab> {
                                                     child: ElevatedButton(
                                                       style: ElevatedButton
                                                           .styleFrom(
-                                                        backgroundColor:
-                                                            Colors.green.shade700,
+                                                        backgroundColor: Colors
+                                                            .green.shade700,
                                                         foregroundColor:
                                                             Colors.white,
                                                         padding:
-                                                            const EdgeInsets.symmetric(
+                                                            const EdgeInsets
+                                                                .symmetric(
                                                                 vertical: 8),
                                                       ),
                                                       onPressed: () {
@@ -1142,8 +1205,8 @@ class _HomeTabState extends State<_HomeTab> {
                                                             _CustomerStatus
                                                                 .collected);
                                                       },
-                                                      child:
-                                                          const Text('Complete'),
+                                                      child: const Text(
+                                                          'Complete'),
                                                     ),
                                                   ),
                                                   const SizedBox(width: 6),
@@ -1152,7 +1215,8 @@ class _HomeTabState extends State<_HomeTab> {
                                                       style: OutlinedButton
                                                           .styleFrom(
                                                         padding:
-                                                            const EdgeInsets.symmetric(
+                                                            const EdgeInsets
+                                                                .symmetric(
                                                                 vertical: 8),
                                                       ),
                                                       onPressed: () {
@@ -1291,6 +1355,8 @@ class _MapCard extends StatelessWidget {
     required this.mapController,
     required this.driverLocation,
     required this.routePoints,
+    required this.orsRoute,
+    required this.driverBearing,
     required this.onCenter,
     required this.stops,
   });
@@ -1298,12 +1364,15 @@ class _MapCard extends StatelessWidget {
   final MapController mapController;
   final LatLng driverLocation;
   final List<LatLng> routePoints;
+  final List<LatLng> orsRoute;
+  final double driverBearing;
   final VoidCallback onCenter;
   final List<_DemoStop> stops;
 
   @override
   Widget build(BuildContext context) {
     final routeLinePoints = <LatLng>[driverLocation, ...routePoints];
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
@@ -1345,22 +1414,36 @@ class _MapCard extends StatelessWidget {
                           subdomains: const ['a', 'b', 'c'],
                           userAgentPackageName: 'com.iwms.citizen.app',
                         ),
+
+                        // Correct polyline logic
                         PolylineLayer(
                           polylines: [
-                            Polyline(
-                              points: routeLinePoints,
-                              color: _driverPrimary.withOpacity(0.7),
-                              strokeWidth: 4,
-                            ),
+                            if (orsRoute.isNotEmpty)
+                              Polyline(
+                                points: orsRoute,
+                                color: Colors.blueAccent,
+                                strokeWidth: 4.5,
+                              )
+                            else
+                              Polyline(
+                                points: routeLinePoints,
+                                color: _driverPrimary.withOpacity(0.6),
+                                strokeWidth: 3.5,
+                              ),
                           ],
                         ),
+
+                        // Markers
                         MarkerLayer(
                           markers: [
                             Marker(
                               width: 42,
                               height: 42,
                               point: driverLocation,
-                              child: _DriverMarker(isActive: true),
+                              child: _DriverMarker(
+                                isActive: true,
+                                rotation: driverBearing,
+                              ),
                             ),
                             ...stops.asMap().entries.map((entry) {
                               final idx = entry.key;
@@ -1429,18 +1512,20 @@ class _MapCard extends StatelessWidget {
 }
 
 class _DriverMarker extends StatelessWidget {
-  const _DriverMarker({required this.isActive});
-
   final bool isActive;
+  final double rotation; // degrees
+
+  const _DriverMarker({required this.isActive, required this.rotation});
 
   @override
   Widget build(BuildContext context) {
-    final double size = isActive ? 26 : 22;
-    return Image.asset(
-      'assets/images/arrow.png',
-      width: size,
-      height: size,
-      fit: BoxFit.contain,
+    return Transform.rotate(
+      angle: rotation * 3.14159 / 180,
+      child: Image.asset(
+        'assets/images/arrow.png',
+        width: isActive ? 36 : 30,
+        height: isActive ? 36 : 30,
+      ),
     );
   }
 }
@@ -1783,7 +1868,8 @@ class _FullMapPageState extends State<_FullMapPage> {
               height: headerHeight,
               width: double.infinity,
               child: TrackingHeroHeader(
-                contextLabel: liveVehicle?.registrationNumber ?? 'Trip tracking',
+                contextLabel:
+                    liveVehicle?.registrationNumber ?? 'Trip tracking',
                 headline: headline,
                 statusPrimary:
                     liveVehicle?.lastUpdated ?? 'Awaiting telemetry update',
@@ -1836,8 +1922,11 @@ class _FullMapPageState extends State<_FullMapPage> {
                                 PolylineLayer(
                                   polylines: [
                                     Polyline(
-                                      points: routeLinePoints,
-                                      color: _driverPrimary.withOpacity(0.8),
+                                      points: [
+                                        widget.origin,
+                                        ...widget.routePoints
+                                      ],
+                                      color: Colors.blueAccent,
                                       strokeWidth: 4.5,
                                     ),
                                   ],
@@ -1848,8 +1937,10 @@ class _FullMapPageState extends State<_FullMapPage> {
                                     width: 44,
                                     height: 44,
                                     point: widget.origin,
-                                    child:
-                                        const _DriverMarker(isActive: true),
+                                    child: const _DriverMarker(
+                                      isActive: true,
+                                      rotation: 0,
+                                    ),
                                   ),
                                   ...widget.stops.asMap().entries.map((entry) {
                                     final idx = entry.key;
@@ -1956,8 +2047,7 @@ class _FullMapPageState extends State<_FullMapPage> {
                                             onPressed: () =>
                                                 _mapController.move(
                                                     widget.origin,
-                                                    _mapController
-                                                        .camera.zoom),
+                                                    _mapController.camera.zoom),
                                             icon: const Icon(
                                               Icons.center_focus_strong_rounded,
                                               color: _driverPrimary,
@@ -1981,7 +2071,7 @@ class _FullMapPageState extends State<_FullMapPage> {
                                         ),
                                       ),
                                       const SizedBox(height: 8),
-                _StopDropdown(stops: widget.stops),
+                                      _StopDropdown(stops: widget.stops),
                                     ],
                                   ),
                                 ),
@@ -2045,7 +2135,8 @@ class _HistoryTab extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           if (loading)
-            const Center(child: Padding(
+            const Center(
+                child: Padding(
               padding: EdgeInsets.all(20.0),
               child: CircularProgressIndicator(),
             ))
@@ -2320,8 +2411,7 @@ class _DriverMapStyleSelector extends StatelessWidget {
               },
               selectedColor: theme.colorScheme.primary,
               labelStyle: theme.textTheme.bodyMedium?.copyWith(
-                color:
-                    isSelected ? Colors.white : theme.colorScheme.onSurface,
+                color: isSelected ? Colors.white : theme.colorScheme.onSurface,
                 fontWeight: FontWeight.w600,
               ),
             ),

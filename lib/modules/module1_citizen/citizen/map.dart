@@ -606,7 +606,7 @@ class _MapScreenState extends State<MapScreen> {
               decoration: const InputDecoration(
                 contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 5),
                 hintText: 'Search vehicle / ward / driver',
-                hintStyle: TextStyle(color: Colors.black54),
+                hintStyle: TextStyle(color: Color.fromARGB(137, 0, 0, 0)),
                 border: InputBorder.none,
               ),
               onChanged: (value) => setState(() => _searchQuery = value.trim()),
